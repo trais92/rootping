@@ -25,6 +25,7 @@ erDiagram
   incidents ||--o{ diagnoses : "wird diagnostiziert von"
   lab_runs |o--o{ incidents : "erzeugt (nur im Labor)"
   network_contexts ||--o{ events : "betrifft"
+  incidents |o--o{ traceroutes : "angefordert bei"
 ```
 
 | Tabelle | Inhalt | Wer schreibt |
@@ -35,6 +36,7 @@ erDiagram
 | `incidents` | Erkannte Störungen (Beginn, Ende, Auslöser) | Störungserkennung |
 | `diagnoses` | Diagnose zu einem Vorfall, von Regeln oder KI | Regel-Baseline, Agent |
 | `lab_runs` | Labor-Durchläufe mit erwarteter Ursache (Ground Truth) | Störungslabor |
+| `traceroutes` | Traceroute-Ergebnisse, nur auf Anfrage | CLI, MCP, Agent |
 
 ## Tabellen im Detail
 
@@ -50,6 +52,7 @@ erDiagram
 | `latency_ms` | REAL | 12.4 | Ping: mittlere Antwortzeit; DNS: Antwortzeit der Abfrage |
 | `loss_pct` | REAL, leer erlaubt | 0.0 | Paketverlust in Prozent (nur Ping) |
 | `jitter_ms` | REAL, leer erlaubt | 1.8 | Schwankung der Antwortzeit (nur Ping) |
+| `max_ms` | REAL, leer erlaubt | 48.0 | Höchste Antwortzeit in der Runde (nur Ping). Zeigt kurze Lags, die im Mittelwert verschwinden. |
 | `error` | TEXT, leer erlaubt | `timeout` | Fehlerart, z. B. `timeout`, `servfail`, `nxdomain`, `unreachable` |
 | `context_id` | INTEGER FK | 3 | Verweis auf `network_contexts` |
 
@@ -94,7 +97,8 @@ Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X i
 | `id` | INTEGER PK | 21 | |
 | `incident_id` | INTEGER FK | 7 | Zu welchem Vorfall |
 | `source` | TEXT | `agent` | `rules` oder `agent` |
-| `layer` | TEXT | `provider` | Ergebnis: `heimnetz`, `provider`, `dns`, `keine_stoerung`, `unklar` |
+| `layer` | TEXT | `provider` | Hauptursache: `heimnetz`, `provider`, `ziel`, `dns`, `keine_stoerung`, `unklar` |
+| `other_layers` | TEXT (JSON), leer erlaubt | `["dns"]` | Weitere gleichzeitige Ursachen (z. B. Szenario „kombiniert“) |
 | `cause` | TEXT | „Paketverlust ab dem Provider, Router unauffällig“ | Ursache in einem Satz |
 | `confidence` | REAL | 0.8 | Sicherheit 0 bis 1 |
 | `evidence` | TEXT (JSON) | `[{"measurement_id": 4711, "note": "30 % Verlust zu 1.1.1.1"}]` | Belege mit Verweis auf Messwerte |
@@ -111,9 +115,23 @@ Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X i
 |---|---|---|---|
 | `id` | INTEGER PK | 2 | |
 | `scenario` | TEXT | `provider_loss_30` | Name des Szenarios |
-| `expected_layer` | TEXT | `provider` | Ground Truth |
+| `expected_layer` | TEXT | `provider` | Ground Truth (Hauptursache) |
+| `expected_other` | TEXT (JSON), leer erlaubt | `["dns"]` | Weitere erwartete Ursachen |
 | `start_ts` / `end_ts` | TEXT | | Zeitraum |
 | `params` | TEXT (JSON) | `{"netem": "loss 30%"}` | netem-Einstellungen |
+
+### `traceroutes`
+
+| Spalte | Typ | Beispiel | Bedeutung |
+|---|---|---|---|
+| `id` | INTEGER PK | 5 | |
+| `ts` | TEXT | | Zeitpunkt |
+| `target` | TEXT | `1.1.1.1` | Ziel |
+| `requested_by` | TEXT | `agent` | `cli`, `mcp` oder `agent` |
+| `incident_id` | INTEGER FK, leer erlaubt | 7 | Bei welcher Störung (falls vorhanden) |
+| `hops` | TEXT (JSON) | `[{"nr": 1, "ip": "192.168.178.1", "ms": [1.2]}, {"nr": 2, "ip": null, "ms": []}]` | Hops; `ip: null` = keine Antwort (`*`) |
+| `reached` | INTEGER (0/1) | 1 | Ziel erreicht? |
+| `duration_ms` | INTEGER | 14500 | Dauer |
 
 ## Beispiel: der Vergleich als eine Abfrage
 
@@ -131,7 +149,7 @@ GROUP BY d.source;
 
 ## Datenmenge und Aufbewahrung
 
-Mit den Standard-Intervallen (Router + 3 Internet-Ziele alle 10 s, 2 DNS-Server alle 30 s) entstehen etwa **40.000 Zeilen pro Tag**, grob 4 MB. Bei einer Aufbewahrung von 30 Tagen (konfigurierbar) bleibt die Datei bei rund 120 MB. Ältere Messungen werden täglich gelöscht; Vorfälle und Diagnosen bleiben.
+Mit den Standard-Intervallen (Router + 3 Internet-Ziele, je 1 Ping pro Sekunde, zusammengefasst alle 10 s; 2 DNS-Server alle 30 s) entstehen etwa **40.000 Zeilen pro Tag**, grob 4 MB. Bei einer Aufbewahrung von 30 Tagen (konfigurierbar) bleibt die Datei bei rund 120 MB. Ältere Messungen werden täglich gelöscht; Vorfälle und Diagnosen bleiben.
 
 ## Änderbarkeit: Schema-Versionen
 
@@ -142,5 +160,5 @@ Mit den Standard-Intervallen (Router + 3 Internet-Ziele alle 10 s, 2 DNS-Server 
 
 ## Offen für spätere Themen
 
-- Welche Schwellwerte lösen einen Vorfall aus? → `docs/diagnose.md`
+- Welche Schwellwerte lösen einen Vorfall aus? → [diagnose.md](diagnose.md). Ob eine Runde „auffällig“ ist, wird beim Abfragen aus den Schwellen berechnet und nicht gespeichert, damit geänderte Schwellen auch für alte Daten gelten.
 - Wie liefert eine Probe ihr Ergebnis an `storage`? → `docs/probes.md`

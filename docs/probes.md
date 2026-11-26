@@ -63,6 +63,7 @@ class ProbeResult:
     latency_ms: float | None = None
     loss_pct: float | None = None
     jitter_ms: float | None = None
+    max_ms: float | None = None   # höchste Antwortzeit der Runde
     error: str | None = None  # z. B. "timeout", "servfail"
 
 
@@ -112,15 +113,17 @@ PROBES: dict[str, type[Probe]] = {
 [probes.ping_gateway]
 enabled  = true
 targets  = ["auto"]
-interval = 10      # Sekunden zwischen zwei Runden
-count    = 5       # Pakete pro Runde
+interval = 10      # Sekunden pro Runde (eine Zeile in der Datenbank)
+count    = 10      # Pakete pro Runde, also 1 Ping pro Sekunde
+packet_interval = 1  # Sekunden zwischen zwei Paketen
 timeout  = 2       # Sekunden
 
 [probes.ping_internet]
 enabled  = true
 targets  = ["1.1.1.1", "9.9.9.9"]
 interval = 10
-count    = 5
+count    = 10
+packet_interval = 1
 timeout  = 2
 
 [probes.dns_lookup]
@@ -155,9 +158,13 @@ Nicht nötig: Datenbank, Scheduler oder andere Probes anfassen.
 
 ## Testen
 
-- **Unit-Tests:** Der eigentliche Netzwerkaufruf (`icmplib.async_ping`, `dns.asyncresolver`) wird durch eine Fälschung ersetzt (Mock). So prüft man z. B., dass bei 2 von 5 verlorenen Paketen `loss_pct == 40.0` herauskommt, ohne Netzwerk.
+- **Unit-Tests:** Der eigentliche Netzwerkaufruf (`icmplib.async_ping`, `dns.asyncresolver`) wird durch eine Fälschung ersetzt (Mock). So prüft man z. B., dass bei 2 von 10 verlorenen Paketen `loss_pct == 20.0` herauskommt, ohne Netzwerk.
 - **`FakeProbe`:** Eine Probe für Tests, die vorgegebene Ergebnisse liefert. Damit lassen sich Scheduler, Störungserkennung und Regeln testen.
 - **Labor:** Die echten Probes laufen gegen die Container (ab Sprint 2).
+
+## Und Traceroute?
+
+Traceroute ist **keine Probe**, weil es nicht regelmäßig läuft. Es ist ein Werkzeug, das nur auf Anfrage startet (CLI, MCP, Agent). Details in [diagnose.md](diagnose.md#traceroute-auf-anfrage).
 
 ## Windows-Hinweis
 

@@ -31,7 +31,9 @@
 |---|---|
 | Ping zum Router (Gateway automatisch erkannt) | WLAN-Werte (stark plattformabhängig) |
 | Ping zu 2–3 Internet-Zielen | macOS, Autostart als Dienst (Windows wie Linux) |
-| DNS-Abfragen gegen System-DNS und einen öffentlichen DNS | Traceroute, HTTPS-Prüfungen, ARP-Geräteliste |
+| DNS-Abfragen gegen System-DNS und einen öffentlichen DNS | Dauerhaftes Traceroute, HTTPS-Prüfungen, ARP-Geräteliste |
+| Traceroute **auf Anfrage** (CLI, MCP, Agent) | |
+| Gaming-taugliche Messung: 1 Ping/s, Maximalwert, absolute Schwellen | |
 | SQLite-Speicherung | Dashboard (stattdessen CLI) |
 | Störungserkennung mit festen Schwellwerten | Normalwerte nach Tageszeit (braucht Wochen an Daten) |
 | Regel-Baseline (Entscheidungsbaum) | Wochenbericht, Desktop-Benachrichtigungen |
@@ -53,11 +55,15 @@ Zielplattformen: **Windows und Linux**. RootPing selbst (Messungen, Erkennung, A
 
 | Messung | Was | Intervall (Vorschlag) | Bibliothek |
 |---|---|---|---|
-| `ping_gateway` | Latenz, Paketverlust, Jitter zum Router | 10 s, je 5 Pakete | `icmplib` (ohne Root möglich) |
-| `ping_internet` | dasselbe zu 2–3 Zielen (z. B. 1.1.1.1, 9.9.9.9) | 10 s | `icmplib` |
+| `ping_gateway` | Latenz (Mittel und Maximum), Paketverlust, Jitter zum Router | 1 Ping/s, zusammengefasst alle 10 s | `icmplib` (ohne Root möglich) |
+| `ping_internet` | dasselbe zu 2–3 Zielen (z. B. 1.1.1.1, 9.9.9.9) | 1 Ping/s, zusammengefasst alle 10 s | `icmplib` |
 | `dns_lookup` | Antwortzeit, Erfolg, Fehlerart (Timeout, SERVFAIL, NXDOMAIN) pro DNS-Server | 30 s | `dnspython` |
 
 **Warum genau diese drei?** Sie reichen für die wichtigste Unterscheidung: *Heimnetz kaputt* (Router-Ping schlecht) vs. *Provider/Internet kaputt* (Router gut, Internet schlecht) vs. *DNS kaputt* (Pings gut, DNS schlecht). Mehr Messungen machen den Agenten nicht klüger, nur das Projekt größer.
+
+**Auch fürs Gaming:** Jeder Wert, der nicht dem guten Zustand entspricht, wird markiert, z. B. schon ein Ping über 60 ms oder ein einzelnes verlorenes Paket. Dafür gibt es zwei Stufen, *Auffälligkeit* und *Störung*, mit absoluten, konfigurierbaren Schwellen. Details in [diagnose.md](diagnose.md).
+
+**Traceroute auf Anfrage:** per `rootping trace`, über MCP oder als Werkzeug des Agenten bei einer Störung. Nie dauerhaft im Hintergrund, weil es langsam ist und fremde Router belastet.
 
 Jede Messung speichert zusätzlich den **Netzwerk-Kontext** (Gateway-IP, Interface). So lässt sich ein Netzwechsel (anderes WLAN, VPN an) von einer echten Störung unterscheiden.
 
@@ -141,7 +147,7 @@ flowchart LR
 | 1 | Erste Messwerte | Gerüst + CI (Windows + Linux), Ping-Spike auf Windows, drei Messungen, SQLite, `rootping run` |
 | 2 | Störungslabor | Docker-Topologie, 5+ Szenarien mit netem, RootPing läuft im Labor, `rootping status` |
 | 3 | Erkennen und Regeln | Vorfallerkennung, Regel-Baseline, gemeinsame Werkzeuge |
-| 4 | KI-Diagnose | Claude-Agent mit Werkzeugen und Limits, MCP-Server |
+| 4 | KI-Diagnose | Claude-Agent mit Werkzeugen und Limits, Traceroute auf Anfrage, MCP-Server |
 | 5 | Beweisen | Auswertung (Tabelle + Konfusionsmatrix), README mit Demo, Puffer |
 
 **Windows kostet etwa 4–6 Stunden extra**, vor allem in Sprint 1 (zweites CI-System, Gateway-Erkennung, Ping-Spike). Deshalb wandert `rootping status` in Sprint 2, und der Puffer in Sprint 5 wird kleiner.
@@ -175,6 +181,8 @@ Klassischer Rahmen (dieser Plan, Meilensteine, Risiken, ADRs) plus **Kanban mit 
 |---|---|
 | Ping ohne Adminrechte klappt auf Windows nicht | Spike gleich in Sprint 1; Plan B System-`ping` oder TCP-Verbindungszeit |
 | Systembefehle liefern je nach Sprache andere Ausgaben (deutsches vs. englisches Windows) | Wo möglich Bibliotheken oder strukturierte Ausgaben (PowerShell-Objekte) statt Text parsen |
+| Traceroute wird falsch gedeutet (Router antworten absichtlich langsam) | Verlust an Zwischen-Hops zählt nur, wenn er bis zum Ziel anhält; Regel steht im Agent-Prompt |
+| Traceroute-Ausgabe unterscheidet sich je System und Sprache | Nur IPs und Zeiten lesen (`-d`/`-n`), Tests mit deutschen und englischen Beispielausgaben |
 | Labor mit netem funktioniert nicht wie gedacht (Rechte, Docker-Netzwerke) | Früh in Sprint 2; Container mit `NET_ADMIN`; notfalls nur ein Container mit netem auf dem eigenen Interface |
 | Messungen laufen nur gegen das echte Netz | Ziele immer aus der Konfiguration, nie fest im Code (Probe-Schnittstelle) |
 | Fehlalarme durch Laptop-Ruhezustand | Zeitsprünge erkennen, als „Messlücke“ markieren statt als Störung |
@@ -190,7 +198,7 @@ Klassischer Rahmen (dieser Plan, Meilensteine, Risiken, ADRs) plus **Kanban mit 
 
 Diese Themen gehen wir einzeln durch. Jedes endet als Markdown-Datei unter `docs/`:
 
-1. **Datenmodell** für Messungen, Vorfälle und Diagnosen → `docs/datenmodell.md`
-2. **Probe-Schnittstelle** (wie sieht ein Messungs-Plugin aus?) → `docs/probes.md`
-3. **Entscheidungsbaum + Testszenarien** (Regel-Baseline und Ground Truth fürs Labor) → `docs/diagnose.md`
+1. **Datenmodell** für Messungen, Vorfälle und Diagnosen → [datenmodell.md](datenmodell.md) ✓
+2. **Probe-Schnittstelle** (wie sieht ein Messungs-Plugin aus?) → [probes.md](probes.md) ✓
+3. **Entscheidungsbaum + Testszenarien** (Regel-Baseline und Ground Truth fürs Labor) → [diagnose.md](diagnose.md) ✓
 4. **Erste ADRs:** z. B. SQLite statt Zeitreihen-DB, `icmplib` statt System-`ping`, Windows + Linux mit Labor nur unter Linux, Regeln vor KI → `docs/adr/`
