@@ -94,6 +94,8 @@ flowchart LR
 2. **Erst Regeln, dann KI.** Die Erkennung „da stimmt was nicht“ ist simple Statistik ohne KI. Claude wird nur gefragt, *warum*. Das ist günstig, testbar und nachvollziehbar.
 3. **Ein Werkzeugsatz, zwei Nutzer.** Agent und MCP-Server rufen dieselben Python-Funktionen auf (z. B. `get_recent_measurements`, `get_incident`, `ping_now`, `dns_lookup_now`).
 4. **Diagnose als strukturierte Antwort:** betroffene Schicht, Ursache, Belege (Messwerte), Sicherheit, Empfehlung. Nur so kann man KI und Regeln automatisch vergleichen.
+5. **Leicht änderbar (Grundregel von Kai).** Kleine Module mit klaren Schnittstellen, keine fest verdrahteten Werte (Ziele, Intervalle, Schwellwerte, Modell kommen aus der Konfiguration), Datenbankschema mit Versionsnummer und Migrationen. Wer eine Messung, eine Regel oder ein Werkzeug ändern will, soll nur eine Stelle anfassen müssen.
+6. **Kein Code ohne Doku.** Jedes Modul hat einen Docstring (wofür ist es da?), jede öffentliche Funktion einen Docstring mit Parametern und Rückgabe, und jede Komponente eine kurze Seite unter `docs/`.
 
 ---
 
@@ -159,7 +161,9 @@ Klassischer Rahmen (dieser Plan, Meilensteine, Risiken, ADRs) plus **Kanban mit 
 
 **Definition of Done**
 - Akzeptanzkriterien erfüllt
-- Tests für neue Logik, CI grün
+- Tests für neue Logik, CI grün auf Windows und Linux
+- Dokumentiert: Docstrings für Module und öffentliche Funktionen, betroffene Seite unter `docs/` aktualisiert (kein Code ohne Doku)
+- Leicht änderbar: keine fest verdrahteten Werte, Konfigurierbares steht in der Konfiguration
 - Keine Geheimnisse und keine echten Netzwerkdaten (eigene IPs, SSIDs) im Repo
 - Per Pull Request gemergt
 
