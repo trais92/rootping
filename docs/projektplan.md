@@ -201,4 +201,4 @@ Diese Themen gehen wir einzeln durch. Jedes endet als Markdown-Datei unter `docs
 1. **Datenmodell** für Messungen, Vorfälle und Diagnosen → [datenmodell.md](datenmodell.md) ✓
 2. **Probe-Schnittstelle** (wie sieht ein Messungs-Plugin aus?) → [probes.md](probes.md) ✓
 3. **Entscheidungsbaum + Testszenarien** (Regel-Baseline und Ground Truth fürs Labor) → [diagnose.md](diagnose.md) ✓
-4. **Erste ADRs:** z. B. SQLite statt Zeitreihen-DB, `icmplib` statt System-`ping`, Windows + Linux mit Labor nur unter Linux, Regeln vor KI → `docs/adr/`
+4. **Erste ADRs:** z. B. SQLite statt Zeitreihen-DB, `icmplib` statt System-`ping`, Windows + Linux mit Labor nur unter Linux, Regeln vor KI, Traceroute auf Anfrage → [adr/](adr/README.md) ✓
