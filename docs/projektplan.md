@@ -125,6 +125,8 @@ flowchart LR
 
 ## 6. Technik
 
+> **Aktualisiert 26.11.2026:** Die ausführliche Prüfung aller Technik-Entscheidungen mit Quellen steht in [tech-stack.md](tech-stack.md) (Vorschlag, in Klärung). Die Tabelle unten ist der ursprüngliche Stand; wichtigste Abweichungen: Python 3.14+, Ping unter Windows über die Windows-ICMP-API statt `icmplib` (ADR-006), MCP SDK 2.x.
+
 | Bereich | Wahl | Kurz begründet |
 |---|---|---|
 | Sprache | Python 3.12+, `uv`, `ruff`, `pytest` | Standard, schnelles Setup |
