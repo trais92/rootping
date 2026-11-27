@@ -1,6 +1,6 @@
 # Probe-Schnittstelle
 
-> Sprint 0 · Stand 26.11.2026 · gehört zu [projektplan.md](projektplan.md) und [datenmodell.md](datenmodell.md)
+> Sprint 0 · Stand 27.11.2026 (an [tech-stack.md](tech-stack.md) und ADR-006/010 angepasst) · gehört zu [projektplan.md](projektplan.md) und [datenmodell.md](datenmodell.md)
 
 Eine **Probe** ist eine Messung, z. B. „Ping zum Router“. Dieses Dokument legt fest, wie eine Probe aussieht, wie sie gestartet wird und wie man eine neue hinzufügt.
 
@@ -9,7 +9,7 @@ Eine **Probe** ist eine Messung, z. B. „Ping zum Router“. Dieses Dokument le
 | # | Frage | Entscheidung | Warum |
 |---|---|---|---|
 | 1 | Speichert eine Probe selbst? | **Nein.** Sie misst und gibt ein `ProbeResult` zurück. Gespeichert wird zentral. | Probes sind ohne Datenbank testbar und laufen unverändert im Labor. |
-| 2 | Wie laufen mehrere Messungen gleichzeitig? | **`asyncio`** | `icmplib` und `dnspython` unterstützen es direkt. Keine Threads, also keine gleichzeitigen Schreibzugriffe. |
+| 2 | Wie laufen mehrere Messungen gleichzeitig? | **`asyncio`** (`TaskGroup`, `asyncio.timeout`) | `dnspython` und der Linux-Ping (`icmplib`) unterstützen es direkt; der blockierende Windows-Ping läuft über `asyncio.to_thread`. Sonst keine Threads, also keine gleichzeitigen Schreibzugriffe. Siehe [tech-stack.md](tech-stack.md#37-nebenläufigkeit-und-scheduler-). |
 | 3 | Wie wird eine Probe bekannt gemacht? | **Einfache Liste im Code** (`PROBES`) plus Konfiguration | Auf einen Blick sichtbar, was es gibt. Ein späterer Wechsel auf automatische Plugin-Suche (Entry Points) ändert die Probes selbst nicht. |
 
 ## `asyncio` in drei Sätzen
@@ -76,13 +76,17 @@ class Probe(ABC):
 
     name: str  # eindeutiger Name, gleich dem Schlüssel in PROBES und in der Konfiguration
 
-    def __init__(self, settings: dict) -> None:
-        """Übernimmt den Abschnitt [probes.<name>] aus der Konfiguration."""
+    def __init__(self, settings: ProbeSettings) -> None:
+        """Übernimmt den geprüften Abschnitt [probes.<name>] aus der Konfiguration.
+
+        ``ProbeSettings`` ist ein Pydantic-Modell (ADR-010). Jede Probe hat eine
+        eigene Unterklasse mit ihren Feldern; Tippfehler fallen beim Start auf.
+        """
         self.settings = settings
 
     def targets(self) -> list[str]:
         """Liefert die Ziele dieser Probe. Standard: Liste aus der Konfiguration."""
-        return self.settings["targets"]
+        return self.settings.targets
 
     @abstractmethod
     async def measure(self, target: str) -> ProbeResult:
@@ -114,21 +118,21 @@ PROBES: dict[str, type[Probe]] = {
 enabled  = true
 targets  = ["auto"]
 interval = 10      # Sekunden pro Runde (eine Zeile in der Datenbank)
-count    = 10      # Pakete pro Runde, also 1 Ping pro Sekunde
-packet_interval = 1  # Sekunden zwischen zwei Paketen
-timeout  = 2       # Sekunden
+                   # Gesendet wird fest 1 Echo pro Sekunde, also 10 pro Runde (ADR-006)
+timeout  = 2       # Sekunden pro Echo; Echos dürfen sich überlappen
 
 [probes.ping_internet]
 enabled  = true
 targets  = ["1.1.1.1", "9.9.9.9"]
 interval = 10
-count    = 10
-packet_interval = 1
 timeout  = 2
 
 [probes.dns_lookup]
 enabled  = true
-targets  = ["system", "1.1.1.1"]   # "system" = DNS-Server des Betriebssystems
+targets  = ["gateway", "system", "1.1.1.1"]
+# "gateway" = DNS-Anfrage direkt an die Router-IP (E7, tech-stack.md 3.10)
+# "system"  = DNS-Server des Betriebssystems; unter Linux mit systemd-resolved
+#             ist das oft der lokale Cache 127.0.0.53, nicht der Router
 query    = "example.com"
 interval = 30
 timeout  = 3
@@ -140,7 +144,7 @@ Für das Labor gibt es eine zweite Datei `config.lab.toml` mit den Container-Adr
 
 Damit Probes klein bleiben, erledigt der Scheduler alles Gemeinsame an einer Stelle:
 
-1. **Takt:** Jede aktivierte Probe läuft in ihrem eigenen Intervall; alle Ziele einer Runde werden mit `asyncio.gather` gleichzeitig gemessen.
+1. **Takt:** Jede aktivierte Probe läuft in ihrem eigenen Intervall, driftfrei über `loop.time()`; alle Ziele einer Runde werden in einer `asyncio.TaskGroup` gleichzeitig gemessen. Der Ping sendet innerhalb der Runde fest jede Sekunde ein Echo, ohne auf die Antwort zu warten, und berechnet Mittelwert, Maximum, Verlust und Jitter selbst (`summarize()`, siehe [diagnose.md](diagnose.md#jitter-definition)).
 2. **Sicherheitsnetz:** Hängt eine Probe länger als ihr Timeout oder wirft sie unerwartet eine Ausnahme, wird daraus ein `ProbeResult` mit `ok=False, error="probe_error"`. Ein Fehler in einer Probe stoppt nie die anderen.
 3. **Messlücken:** Liegt zwischen zwei Runden deutlich mehr Zeit als das Intervall (z. B. nach dem Ruhezustand), schreibt der Scheduler ein Ereignis `gap` statt einer Störung.
 4. **Netzwerk-Kontext:** Vor jeder Runde prüft er Gateway und Interface. Hat sich etwas geändert, legt er einen neuen Kontext an und schreibt ein Ereignis `network_change`.
@@ -158,7 +162,7 @@ Nicht nötig: Datenbank, Scheduler oder andere Probes anfassen.
 
 ## Testen
 
-- **Unit-Tests:** Der eigentliche Netzwerkaufruf (`icmplib.async_ping`, `dns.asyncresolver`) wird durch eine Fälschung ersetzt (Mock). So prüft man z. B., dass bei 2 von 10 verlorenen Paketen `loss_pct == 20.0` herauskommt, ohne Netzwerk.
+- **Unit-Tests:** Der eigentliche Netzwerkaufruf (die Funktion `echo()` aus `rootping/net/icmp.py`, `dns.asyncresolver`) wird durch eine Fälschung ersetzt (Mock). So prüft man z. B., dass bei 2 von 10 verlorenen Paketen `loss_pct == 20.0` herauskommt, ohne Netzwerk.
 - **`FakeProbe`:** Eine Probe für Tests, die vorgegebene Ergebnisse liefert. Damit lassen sich Scheduler, Störungserkennung und Regeln testen.
 - **Labor:** Die echten Probes laufen gegen die Container (ab Sprint 2).
 
@@ -168,4 +172,9 @@ Traceroute ist **keine Probe**, weil es nicht regelmäßig läuft. Es ist ein We
 
 ## Windows-Hinweis
 
-`icmplib` wird mit `privileged=False` aufgerufen, damit kein Admin nötig ist. Ob das unter Windows zuverlässig klappt, prüft ein kurzer Spike am Anfang von Sprint 1. Plan B: `PingProbe` ruft den System-`ping` auf. Weil der Rest nur `measure()` kennt, betrifft ein Wechsel nur diese eine Klasse.
+Ping läuft auf beiden Systemen **ohne Adminrechte**, aber über verschiedene Wege ([ADR-006](adr/006-ping-ueber-betriebssystem-schnittstellen.md)):
+
+- **Windows:** Windows-ICMP-API `IcmpSendEcho2` aus `Iphlpapi.dll` über `ctypes`, derselbe Weg wie `ping.exe`. `icmplib` scheidet hier aus, weil es unter Windows immer einen Raw Socket öffnet und damit Admin braucht (Befund B1). Laufzeiten kommen in ganzen Millisekunden.
+- **Linux:** ICMP-Datagram-Socket über `icmplib` (`async_ping(count=1, privileged=False)`). Voraussetzung: `net.ipv4.ping_group_range` erlaubt die Gruppe des Nutzers (Befund B3). Ist das nicht so, meldet RootPing das beim Start mit einer verständlichen Anleitung.
+
+Beides steckt hinter einer Funktion `echo(target, timeout) -> float | None` in `rootping/net/icmp.py`. Die Windows-Umsetzung prüft ein Spike am Anfang von Sprint 1 auf Kais PC **ohne erhöhte Rechte** (GitHub-Windows-Runner laufen als Admin). Notlösung, falls die API wider Erwarten scheitert: System-`ping` aufrufen. Ein Wechsel betrifft nur `icmp.py`.

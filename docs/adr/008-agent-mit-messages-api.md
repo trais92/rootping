@@ -1,6 +1,6 @@
 # ADR-008: Claude-Agent über die Messages API mit eigener Schleife
 
-- **Status:** vorgeschlagen
+- **Status:** angenommen (2026-11-27, Kai)
 - **Datum:** 2026-11-26
 
 ## Kontext

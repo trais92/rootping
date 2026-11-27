@@ -1,6 +1,6 @@
 # ADR-009: MCP-Server mit dem offiziellen SDK 2.x, nur stdio, nur lesend
 
-- **Status:** vorgeschlagen
+- **Status:** angenommen (2026-11-27, Kai)
 - **Datum:** 2026-11-26
 
 ## Kontext

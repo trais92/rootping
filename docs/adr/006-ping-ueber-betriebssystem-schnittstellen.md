@@ -1,6 +1,6 @@
 # ADR-006: Ping über die Schnittstellen des Betriebssystems, mit festem Takt
 
-- **Status:** vorgeschlagen (ersetzt nach Annahme [ADR-004](004-ping-ohne-adminrechte.md))
+- **Status:** angenommen (2026-11-27, Kai), ersetzt [ADR-004](004-ping-ohne-adminrechte.md)
 - **Datum:** 2026-11-26
 
 ## Kontext

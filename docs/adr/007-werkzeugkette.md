@@ -1,6 +1,6 @@
 # ADR-007: Werkzeugkette (Python, uv, ruff, Pyright, prek)
 
-- **Status:** vorgeschlagen
+- **Status:** angenommen (2026-11-27, Kai)
 - **Datum:** 2026-11-26
 
 ## Kontext

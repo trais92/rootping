@@ -1,6 +1,6 @@
 # ADR-010: Konfiguration in TOML, geprüft mit pydantic-settings
 
-- **Status:** vorgeschlagen
+- **Status:** angenommen (2026-11-27, Kai)
 - **Datum:** 2026-11-26
 
 ## Kontext

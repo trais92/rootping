@@ -1,7 +1,7 @@
 # Technische Grundlage (Tech-Stack)
 
 > Sprint 0 · Stand **26.11.2026** · gehört zu [projektplan.md](projektplan.md), [probes.md](probes.md), [datenmodell.md](datenmodell.md), [diagnose.md](diagnose.md)
-> Status: **Vorschlag, in Klärung mit Kai.** Die neuen ADRs 006–010 stehen auf „vorgeschlagen“, bis Kai die offenen Entscheidungen (Abschnitt 5) bestätigt hat.
+> Status: **Entschieden am 27.11.2026.** Kai hat alle Empfehlungen aus Abschnitt 5 (E1–E7) angenommen. ADR 006–010 sind angenommen, ADR-004 ist durch ADR-006 ersetzt.
 
 Dieses Dokument prüft jeden Baustein der bisherigen Technik-Planung gegen aktuelle Alternativen und gibt pro Bereich eine Empfehlung mit Begründung und Quellen. Wo der bisherige Plan schon die beste Wahl ist, steht das ausdrücklich da.
 
@@ -25,7 +25,7 @@ Dieses Dokument prüft jeden Baustein der bisherigen Technik-Planung gegen aktue
 - **Externe Pings waren in der Testumgebung gesperrt.** Ping wurde gegen `127.0.0.1` getestet; Paketverlust wurde mit dem gesperrten Ziel `1.1.1.1` erzeugt (jedes Echo geht verloren). Das reicht für die Aussagen zu Rechten und Takt, nicht für echte Latenzwerte.
 - **Sekundärquellen zu Typprüfern** (Konformitätszahlen) stammen aus einem Blog vom April/Mai 2026 [Q31]; sie können sich seitdem verändert haben.
 
-**Legende:** ✅ bleibt wie geplant · 🔁 ändern · ➕ neu · ❓ Entscheidung durch Kai
+**Legende:** ✅ bleibt wie geplant · 🔁 ändern · ➕ neu · ❓ Entscheidung durch Kai (alle am 27.11.2026 wie empfohlen getroffen, Abschnitt 5)
 
 ---
 
@@ -198,7 +198,7 @@ docs/
 - *mypy* (2.4.1): funktioniert, aber geringere Konformität [Q31] und langsamer; kein Grund, es neu einzuführen.
 - *Pyrefly* (Meta, 1.5.0) und *basedpyright*: brauchbar, aber weniger verbreitet; beim Erklären im Bewerbungsgespräch ist „Pyright, dieselbe Engine wie in VS Code“ eingängiger.
 
-**Unsicher:** Die Konformitätszahlen sind von März 2026 und aus einem Blog [Q31]. ty entwickelt sich schnell; in einem halben Jahr kann die Empfehlung anders ausfallen. Deshalb ist der Wechsel als offene Entscheidung (Abschnitt 5) festgehalten.
+**Unsicher:** Die Konformitätszahlen sind von März 2026 und aus einem Blog [Q31]. ty entwickelt sich schnell; in einem halben Jahr kann die Empfehlung anders ausfallen. Deshalb ist der spätere Wechsel als Entscheidung E4 festgehalten (Abschnitt 5): Pyright jetzt, ty später erneut prüfen.
 
 ### 3.6 Git-Hooks: prek ➕
 
@@ -419,7 +419,7 @@ Darüber liegt ein **Takt-Treiber**: Pro Ziel startet er jede Sekunde ein `echo(
 | Claude Managed Agents | Anthropic betreibt Schleife und eine Sandbox in der Cloud; eigene Werkzeuge werden an den eigenen Rechner zurückgegeben | Die Werkzeuge müssen ohnehin **lokal** laufen (Router anpingen, lokale DB lesen). Managed Agents ist **Beta**, berechnet zusätzlich Laufzeit ($0,08 pro Session-Stunde [Q25]) und speichert den Verlauf bei Anthropic, bis man ihn löscht. Für einen kurzen, lokalen Diagnose-Lauf ist das mehr Infrastruktur als Nutzen. Es wäre eine legitime Alternative, wenn RootPing später als gehosteter Dienst laufen soll. |
 | Frameworks (LangChain, PydanticAI, …) | Abstraktion über mehrere Anbieter | Zusätzliche Schicht ohne Nutzen, da nur Claude verwendet wird; verdeckt genau das, was das Projekt zeigen soll. |
 
-**Modellwahl ❓:** Die Modellübersicht von Anthropic empfiehlt **Claude Opus 5.5** (`claude-opus-5-5`) als Einstiegsmodell, wenn man unsicher ist [Q45, abgerufen 26.11.2026]. Für die Auswertung bietet sich an, **dasselbe Szenario-Set zusätzlich mit Sonnet 5.5 und Haiku 5.5** laufen zu lassen. Das beantwortet die im Gespräch naheliegende Frage „Braucht man dafür das große Modell?“ mit Zahlen. Das ist Kais Entscheidung (Abschnitt 5).
+**Modellwahl ❓:** Die Modellübersicht von Anthropic empfiehlt **Claude Opus 5.5** (`claude-opus-5-5`) als Einstiegsmodell, wenn man unsicher ist [Q45, abgerufen 26.11.2026]. Für die Auswertung bietet sich an, **dasselbe Szenario-Set zusätzlich mit Sonnet 5.5 und Haiku 5.5** laufen zu lassen. Das beantwortet die im Gespräch naheliegende Frage „Braucht man dafür das große Modell?“ mit Zahlen. Kai hat das am 27.11.2026 so entschieden (E6, Abschnitt 5).
 
 **Weitere Einstellungen (aus der Anthropic-Doku):** Auf Opus 5.5 lässt sich das Nachdenken nicht abschalten; gesteuert wird über `output_config.effort` (Standard dort `medium`; Nachdenken adaptiv und immer an [Q45]), der Wert kommt aus der Konfiguration. Ein serverseitiger Fallback bei Ablehnungen (`fallbacks`) existiert als Beta; bei Netzwerkdiagnosen sind Ablehnungen unwahrscheinlich, der Parameter kann trotzdem konfigurierbar vorgesehen werden. `stop_reason` wird vor dem Lesen des Inhalts immer geprüft.
 
@@ -457,11 +457,11 @@ Darüber liegt ein **Takt-Treiber**: Pro Ziel startet er jede Sekunde ein `echo(
 
 ## 4. Auswirkungen auf die bestehende Doku
 
-Diese Änderungen schlage ich vor. **Nichts davon ist schon umgesetzt**, außer der Statuszeile von ADR-004, den neuen ADRs 006–010 (Status „vorgeschlagen“) und einem Verweis in [projektplan.md](projektplan.md) auf dieses Dokument. Die Anpassungen an `probes.md`, `diagnose.md` und `projektplan.md` mache ich, sobald Kai die offenen Punkte entschieden hat.
+Nach Kais Entscheidung (27.11.2026) sind alle Änderungen dieser Tabelle umgesetzt. Ausnahme: Das Risiko „Ping ohne Admin“ im Projektplan bleibt offen, bis der Windows-Spike in Sprint 1 es bestätigt.
 
 | Datei | Änderung | Grund |
 |---|---|---|
-| [adr/004](adr/004-ping-ohne-adminrechte.md) | Statuszeile: „Ersatz vorgeschlagen durch ADR-006“ (schon geändert); nach Kais Zustimmung „ersetzt durch ADR-006“. Inhalt bleibt, wie es die ADR-Regeln verlangen. | B1 |
+| [adr/004](adr/004-ping-ohne-adminrechte.md) | Statuszeile: „ersetzt durch ADR-006“. Inhalt bleibt, wie es die ADR-Regeln verlangen. | B1 |
 | [probes.md](probes.md) | Ping-Konfiguration: `count`/`packet_interval` durch „1 Echo pro Sekunde, Runde = 10 s“ ersetzen; Timeout ≤ Paketabstand empfohlen oder überlappend erlaubt; `settings: dict` → Pydantic-Modell; Windows-Hinweis neu | B1, B2, 3.13 |
 | [diagnose.md](diagnose.md) | Jitter-Definition festschreiben; Hinweis zu DNS-Ziel „gateway“ und Cache-Effekt | 3.8, 3.10 |
 | [projektplan.md](projektplan.md) | Technik-Tabelle (Abschnitt 6) auf diese Datei verweisen; Python 3.14+; Risiko „Ping ohne Admin“ auf „gelöst durch ICMP-API, Spike bestätigt“ setzen | 3.1, 3.8 |
@@ -469,9 +469,11 @@ Diese Änderungen schlage ich vor. **Nichts davon ist schon umgesetzt**, außer 
 
 ---
 
-## 5. Offene Entscheidungen für Kai
+## 5. Entscheidungen (getroffen am 27.11.2026)
 
-| # | Frage | Optionen | Empfehlung |
+Kai hat am 27.11.2026 **alle Empfehlungen angenommen**. Die Spalte „Empfehlung“ ist damit die Entscheidung.
+
+| # | Frage | Optionen | Empfehlung = Entscheidung |
 |---|---|---|---|
 | E1 | **Python-Version** | A) Untergrenze 3.14, entwickelt auf 3.15, CI beide · B) nur 3.15 · C) nur 3.14 | **A**: aktuell, aber mit getesteter Rückfallebene |
 | E2 | **Ping unter Windows** | A) Windows-ICMP-API über `ctypes` (eigener Code, ~80 Zeilen) · B) System-`ping` aufrufen · C) Bibliothek `ipscout` | **A**: ohne Admin, ohne Unterprozess, gut erklärbar, keine junge Abhängigkeit |
