@@ -28,9 +28,13 @@ timeout  = 2         # Sekunden Wartezeit pro Echo; Echos dürfen sich überlapp
 
 [probes.ping_internet]
 enabled  = true
-targets  = ["1.1.1.1", "9.9.9.9"]  # nur IPv4-Adressen, keine Namen (ADR-011)
+targets  = ["1.1.1.1", "9.9.9.9"]  # IPv4-Adressen (ADR-011)
 interval = 10
 timeout  = 2
+# true = auch Namen wie "www.ea.com" als Ziel erlauben, um eine Website oder einen
+# Spieldienst gezielt zu testen. Der Name wird vor jeder Runde neu aufgelöst;
+# klappt das nicht, heißt das Ergebnis "resolve_failed" (nicht Paketverlust).
+allow_hostnames = false
 
 [probes.dns_lookup]
 enabled  = true

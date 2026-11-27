@@ -6,6 +6,7 @@ from itertools import pairwise
 import pytest
 from pydantic import ValidationError
 
+from rootping.net.resolve import ResolveError
 from rootping.platform import NetworkContext
 from rootping.probes import ping
 from rootping.probes.ping import (
@@ -13,6 +14,7 @@ from rootping.probes.ping import (
     PingGatewayProbe,
     PingGatewaySettings,
     PingInternetProbe,
+    PingInternetSettings,
     PingSettings,
     fixed_rate_echoes,
 )
@@ -108,7 +110,7 @@ async def test_results_keep_send_order_even_if_replies_arrive_out_of_order() -> 
 
 async def test_internet_probe_summarizes_a_round() -> None:
     probe = PingInternetProbe(
-        PingSettings(interval=4), echo=scripted_echo([20.0, 25.0, None, 22.0])
+        PingInternetSettings(interval=4), echo=scripted_echo([20.0, 25.0, None, 22.0])
     )
     result = await probe.measure("1.1.1.1")
     assert result.probe == "ping_internet"
@@ -122,7 +124,7 @@ async def test_internet_probe_summarizes_a_round() -> None:
 
 
 async def test_round_without_any_reply_is_not_ok() -> None:
-    probe = PingInternetProbe(PingSettings(interval=3), echo=scripted_echo([None] * 3))
+    probe = PingInternetProbe(PingInternetSettings(interval=3), echo=scripted_echo([None] * 3))
     result = await probe.measure("9.9.9.9")
     assert (result.ok, result.loss_pct, result.error) == (False, 100.0, "no_reply")
 
@@ -145,3 +147,50 @@ async def test_gateway_probe_without_router_reports_no_gateway() -> None:
     assert targets == [AUTO]
     result = await probe.measure(targets[0])
     assert (result.ok, result.error, result.target) == (False, "no_gateway", AUTO)
+
+
+# --- Hostnamen als Ziel (Opt-in, ADR-011) -------------------------------------------
+
+
+def test_hostnames_need_opt_in() -> None:
+    with pytest.raises(ValidationError, match="allow_hostnames"):
+        PingInternetSettings(targets=["www.ea.com"])
+    s = PingInternetSettings(targets=["www.ea.com", "1.1.1.1"], allow_hostnames=True)
+    assert s.targets == ["www.ea.com", "1.1.1.1"]
+
+
+@pytest.mark.parametrize("target", ["https://www.ea.com/", "ea", "www.ea.com/fifa", "-a.com"])
+def test_urls_and_invalid_names_are_rejected(target: str) -> None:
+    with pytest.raises(ValidationError, match="weder eine IPv4-Adresse noch ein Hostname"):
+        PingInternetSettings(targets=[target], allow_hostnames=True)
+
+
+def test_gateway_never_takes_hostnames() -> None:
+    with pytest.raises(ValidationError):
+        PingGatewaySettings(targets=["fritz.box"])
+
+
+async def test_hostname_is_resolved_and_stored_by_name() -> None:
+    pinged: list[str] = []
+
+    async def echo(target: str, timeout: float) -> float | None:
+        pinged.append(target)
+        return 30.0
+
+    async def resolver(name: str, timeout: float) -> str:
+        return "203.0.113.7"
+
+    settings = PingInternetSettings(interval=2, targets=["www.ea.com"], allow_hostnames=True)
+    result = await PingInternetProbe(settings, echo=echo, resolver=resolver).measure("www.ea.com")
+    assert pinged == ["203.0.113.7", "203.0.113.7"]
+    assert (result.target, result.ok, result.latency_ms) == ("www.ea.com", True, 30.0)
+
+
+async def test_failed_resolution_is_not_packet_loss() -> None:
+    async def resolver(name: str, timeout: float) -> str:
+        raise ResolveError("unbekannt")
+
+    settings = PingInternetSettings(interval=2, targets=["www.ea.com"], allow_hostnames=True)
+    probe = PingInternetProbe(settings, echo=scripted_echo([]), resolver=resolver)
+    result = await probe.measure("www.ea.com")
+    assert (result.ok, result.error, result.loss_pct) == (False, "resolve_failed", None)

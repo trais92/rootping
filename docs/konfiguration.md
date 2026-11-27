@@ -35,7 +35,8 @@ Ungültige Konfiguration (C:\Users\kai\AppData\Local\rootping\config.toml):
 | `probes.<name>.interval` | 10 (Ping), 30 (DNS) | Sekunden pro Runde; bei Ping ganze Zahl, weil 1 Echo pro Sekunde |
 | `probes.<name>.timeout` | 2 (Ping), 3 (DNS) | Sekunden Wartezeit pro Echo bzw. Abfrage (höchstens 30) |
 | `probes.ping_gateway.targets` | `["auto"]` | `"auto"` = Router erkennen, sonst IPv4-Adressen |
-| `probes.ping_internet.targets` | `["1.1.1.1", "9.9.9.9"]` | nur IPv4-Adressen ([ADR-011](adr/011-ping-ziele-nur-ipv4-adressen.md)) |
+| `probes.ping_internet.targets` | `["1.1.1.1", "9.9.9.9"]` | IPv4-Adressen ([ADR-011](adr/011-ping-ziele-adressen-namen-nur-auf-wunsch.md)) |
+| `probes.ping_internet.allow_hostnames` | `false` | `true` erlaubt Namen wie `www.ea.com` als Ziel ([ping.md](ping.md#websites-gezielt-testen)) |
 | `probes.dns_lookup.targets` | `["gateway", "system", "1.1.1.1"]` | siehe [dns.md](dns.md) |
 | `probes.dns_lookup.query` | `"example.com"` | abgefragter Name; blockt ein Pi-hole ihn, meldet RootPing `blocked` |
 | `probes.dns_lookup.only_system_with_vpn` | `true` | bei aktivem VPN nur `system` messen ([dns.md](dns.md#vpn)) |

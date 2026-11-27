@@ -6,6 +6,7 @@ import pytest
 from typer.testing import CliRunner
 
 import rootping.net.dns_query
+import rootping.net.resolve
 import rootping.platform
 from rootping import cli, logsetup
 from rootping.platform import NetworkContext
@@ -109,6 +110,22 @@ def test_check_explains_vpn_and_blocked_test_name(
     assert "DNS-Server:    10.5.0.2" in result.output
     assert "10.5.0.2" in result.output.split("Test-DNS")[1]
     assert "WARNUNG" in result.output
+
+
+@pytest.mark.usefixtures("fake_network")
+def test_check_resolves_hostname_targets(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def resolver(name: str, timeout: float) -> str:
+        return "203.0.113.7"
+
+    monkeypatch.setattr(rootping.net.resolve, "resolve_ipv4", resolver)
+    config = tmp_path / "host.toml"
+    config.write_text(
+        '[probes.ping_internet]\ntargets = ["www.ea.com"]\nallow_hostnames = true\n',
+        encoding="utf-8",
+    )
+    result = runner.invoke(cli.app, ["check", "--config", str(config)])
+    assert result.exit_code == 0, result.output
+    assert "www.ea.com = 203.0.113.7" in result.output
 
 
 @pytest.mark.usefixtures("fake_network")

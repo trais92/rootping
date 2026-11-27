@@ -1,12 +1,13 @@
 # Ping: wie RootPing misst
 
-> Stand 27.11.2026 · Code: `src/rootping/probes/ping.py`, `net/icmp.py`, `platform/` · Entscheidung: [ADR-006](adr/006-ping-ueber-betriebssystem-schnittstellen.md), [ADR-011](adr/011-ping-ziele-nur-ipv4-adressen.md)
+> Stand 27.11.2026 · Code: `src/rootping/probes/ping.py`, `net/icmp.py`, `platform/` · Entscheidung: [ADR-006](adr/006-ping-ueber-betriebssystem-schnittstellen.md), [ADR-011](adr/011-ping-ziele-adressen-namen-nur-auf-wunsch.md)
 
 ## Kurz gesagt
 
 - Zwei Messungen: `ping_gateway` (zum eigenen Router) und `ping_internet` (Standard: 1.1.1.1 und 9.9.9.9).
 - **Jede Sekunde ein Echo**, fest getaktet. Nach 10 Sekunden werden die 10 Antworten zu einer Zeile zusammengefasst: Mittelwert, Höchstwert, Verlust und Jitter.
 - **Ohne Adminrechte** auf Windows und **ohne root** auf Linux.
+- Ziele sind IPv4-Adressen. Websites oder Spieldienste per Name nur mit `allow_hostnames = true` ([unten](#websites-gezielt-testen)).
 
 ## Eine Runde im Ablauf
 
@@ -37,7 +38,23 @@ sequenceDiagram
 | `loss_pct` | Anteil verlorener Echos in Prozent |
 | `jitter_ms` | Mittel der Abstände aufeinanderfolgender Antwortzeiten, verlorene übersprungen ([Definition](diagnose.md#jitter-definition)) |
 | `ok` | 1, wenn mindestens eine Antwort kam |
-| `error` | `no_reply` (keine einzige Antwort), `no_gateway` (kein Router erkannt), `probe_error` (Fehler im Programm) |
+| `error` | `no_reply` (keine einzige Antwort), `no_gateway` (kein Router erkannt), `resolve_failed` (Name ließ sich nicht auflösen, nur mit `allow_hostnames`), `probe_error` (Fehler im Programm) |
+
+## Websites gezielt testen
+
+Standardmäßig sind nur IPv4-Adressen erlaubt, damit Ping nie vom DNS abhängt ([ADR-011](adr/011-ping-ziele-adressen-namen-nur-auf-wunsch.md)). Wer eine bestimmte Website oder einen Spieldienst testen will, schaltet Namen für `ping_internet` ein:
+
+```toml
+[probes.ping_internet]
+targets = ["1.1.1.1", "www.ea.com"]
+allow_hostnames = true
+```
+
+- Nur den Namen eintragen, ohne `https://` und ohne Pfad.
+- Der Name wird vor jeder Runde über das Betriebssystem aufgelöst (wie im Browser). Gemessen wird die Adresse, die dabei herauskommt; gespeichert wird der Name.
+- Klappt die Auflösung nicht, steht in der Runde `error = resolve_failed` und **kein** Verlust. So sieht man: Das Problem ist DNS, nicht die Leitung.
+- `rootping check` zeigt, in welche Adresse ein Name gerade aufgelöst wird.
+- Hinweis: Manche Server beantworten keine Pings (Firewall). Dann zeigt RootPing dauerhaft `no_reply`, obwohl die Website funktioniert. `rootping check` macht das vorab sichtbar.
 
 ## Windows: ICMP-API wie `ping.exe`
 
@@ -84,7 +101,7 @@ Wer es enger fassen will, trägt statt `0 2147483647` nur die eigene Gruppennumm
 
 ## Was bewusst nicht geht
 
-- **Namen als Ziel** (`dns.google`): nein, nur IPv4-Adressen. Sonst sähe eine DNS-Störung aus wie Paketverlust ([ADR-011](adr/011-ping-ziele-nur-ipv4-adressen.md)).
+- **Namen als Ziel** (`dns.google`): nein, nur IPv4-Adressen. Sonst sähe eine DNS-Störung aus wie Paketverlust ([ADR-011](adr/011-ping-ziele-adressen-namen-nur-auf-wunsch.md)).
 - **IPv6:** nicht in v1. Beide Systeme hätten dafür eigene Funktionen (`Icmp6SendEcho2`, ICMPv6-Socket); eine Erweiterung beträfe nur `platform/` und die Prüfung der Ziele.
 - **Notlösung System-`ping`:** dokumentiert in ADR-006, aber nicht gebaut, solange die ICMP-API funktioniert.
 

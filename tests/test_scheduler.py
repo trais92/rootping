@@ -37,12 +37,12 @@ async def test_crashing_probe_becomes_probe_error_and_others_continue(storage: S
     assert sum(r["probe"] == "fake" and r["ok"] == 1 for r in rows) == 4
 
 
-async def test_hanging_probe_is_stopped_after_interval_plus_timeout(storage: Storage) -> None:
+async def test_hanging_probe_is_stopped_after_its_time_limit(storage: Storage) -> None:
     hanging = FakeProbe(FakeSettings(targets=["x"]), behaviour="hang")
     loop = asyncio.get_running_loop()
     start = loop.time()
     await make(storage, hanging).run(rounds=1)
-    assert loop.time() - start < 1.0  # Grenze 0,05 + 0,05 s, nicht eine Stunde
+    assert loop.time() - start < 1.0  # Grenze 0,05 + 2 × 0,05 s, nicht eine Stunde
     [row] = storage.recent_measurements()
     assert row["error"] == "probe_error"
 

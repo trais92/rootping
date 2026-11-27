@@ -71,6 +71,7 @@ Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X i
 | `timeout`, `nxdomain`, `noanswer`, `servfail`, `dns_error` | DNS | siehe [dns.md](dns.md) |
 | `blocked` | DNS | Testname wird von einem Werbeblocker gesperrt (Antwort `0.0.0.0`); `latency_ms` ist trotzdem gefüllt |
 | `no_system_dns` | DNS | Kein DNS-Server im Betriebssystem eingerichtet |
+| `resolve_failed` | Ping | Ziel ist ein Name (`allow_hostnames`) und ließ sich nicht auflösen; `loss_pct` bleibt leer |
 | `probe_error` | alle | Fehler im Programm oder Zeitlimit überschritten; Details im Log |
 
 Ein Ping mit teilweisem Verlust ist `ok = 1` ohne `error`; der Verlust steht in `loss_pct`.

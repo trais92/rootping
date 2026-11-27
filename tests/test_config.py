@@ -57,8 +57,15 @@ def test_typo_in_key_names_the_location(tmp_path: Path) -> None:
 
 def test_hostname_as_ping_target_is_rejected(tmp_path: Path) -> None:
     path = write(tmp_path, '[probes.ping_internet]\ntargets = ["example.com"]\n')
-    with pytest.raises(ConfigError, match="keine IPv4-Adresse"):
+    with pytest.raises(ConfigError, match="allow_hostnames"):
         load_settings(path)
+
+
+def test_hostname_as_ping_target_with_opt_in(tmp_path: Path) -> None:
+    path = write(
+        tmp_path, '[probes.ping_internet]\ntargets = ["example.com"]\nallow_hostnames = true\n'
+    )
+    assert load_settings(path).probes.ping_internet.targets == ["example.com"]
 
 
 def test_missing_explicit_file(tmp_path: Path) -> None:

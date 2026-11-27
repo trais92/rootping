@@ -22,10 +22,10 @@ import typer
 from rootping import __version__, platform
 from rootping.config import ConfigError, Settings, default_config_path, load_settings
 from rootping.logsetup import setup_logging
-from rootping.net import icmp
+from rootping.net import icmp, resolve
 from rootping.probes.base import ProbeResult
 from rootping.probes.dns import DnsProbe
-from rootping.probes.ping import ECHO_PERIOD_S, fixed_rate_echoes
+from rootping.probes.ping import ECHO_PERIOD_S, fixed_rate_echoes, is_ipv4
 from rootping.service import run_service
 
 app = typer.Typer(
@@ -143,12 +143,20 @@ async def _test_network(settings: Settings, context: platform.NetworkContext | N
     """Sendet für ``check`` ein paar Test-Pings und je eine DNS-Abfrage und zeigt das Ergebnis."""
     ping_settings = settings.probes.ping_internet
     targets = [context.gateway] if context else []
-    targets += ping_settings.targets[:1]
+    targets += ping_settings.targets
     typer.echo(f"\nTest-Ping, je {CHECK_ECHOES} Echos:")
     for target in targets:
+        address = target
+        if not is_ipv4(target):
+            try:
+                address = await resolve.resolve_ipv4(target, ping_settings.timeout)
+            except resolve.ResolveError:
+                typer.echo(f"  {target:<15} FEHLER: Name nicht auflösbar (resolve_failed)")
+                continue
+            typer.echo(f"  {target} = {address}")
         rtts = await fixed_rate_echoes(
             icmp.echo,
-            target,
+            address,
             count=CHECK_ECHOES,
             period=ECHO_PERIOD_S,
             timeout=ping_settings.timeout,

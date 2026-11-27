@@ -24,7 +24,7 @@ from pydantic_settings import (
 )
 
 from rootping.probes.dns import DnsSettings
-from rootping.probes.ping import PingGatewaySettings, PingSettings
+from rootping.probes.ping import PingGatewaySettings, PingInternetSettings
 
 APP_NAME = "rootping"
 
@@ -45,7 +45,7 @@ class ProbesSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     ping_gateway: PingGatewaySettings = Field(default_factory=PingGatewaySettings)
-    ping_internet: PingSettings = Field(default_factory=PingSettings)
+    ping_internet: PingInternetSettings = Field(default_factory=PingInternetSettings)
     dns_lookup: DnsSettings = Field(default_factory=DnsSettings)
 
 

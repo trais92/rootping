@@ -143,11 +143,13 @@ class Scheduler:
     async def _measure_safely(self, probe: Probe[Any], target: str) -> ProbeResult:
         """Ruft ``probe.measure`` auf und macht aus jedem Fehler ein Ergebnis.
 
-        Obergrenze für eine Runde ist ``interval + timeout``: Danach ist auch
-        das letzte Echo sicher beantwortet oder verloren.
+        Obergrenze für eine Runde ist ``interval + 2 * timeout``: ein
+        ``timeout`` für eine mögliche Namensauflösung vorab (Ping-Ziele als
+        Hostname, ADR-011), danach ist auch das letzte Echo sicher beantwortet
+        oder verloren.
         """
         ts = utc_now()
-        limit = probe.settings.interval + probe.settings.timeout
+        limit = probe.settings.interval + 2 * probe.settings.timeout
         try:
             async with asyncio.timeout(limit):
                 return await probe.measure(target)

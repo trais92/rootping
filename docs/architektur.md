@@ -15,6 +15,7 @@ flowchart LR
   reg --> ping["probes/ping.py<br>ping_gateway · ping_internet"]
   reg --> dnsp["probes/dns.py<br>dns_lookup"]
   ping --> icmp["net/icmp.py<br>echo()"]
+  ping -.->|nur Namensziele| res["net/resolve.py<br>resolve_ipv4()"]
   dnsp --> dnsq["net/dns_query.py<br>query()"]
   icmp --> plat["platform/<br>linux.py · windows.py"]
   ping -. Router .-> plat
@@ -38,6 +39,7 @@ flowchart LR
 | `probes/dns.py` | DNS-Runde: eine Abfrage pro Server | sich die DNS-Messung ändert | [dns.md](dns.md) |
 | `net/icmp.py` | Ein einzelnes Echo, gleich auf beiden Systemen | der Ping-Weg wechselt | [ping.md](ping.md) |
 | `net/dns_query.py` | Eine DNS-Abfrage mit fester Fehlerart | sich die Fehlerarten ändern | [dns.md](dns.md) |
+| `net/resolve.py` | Namen über das Betriebssystem auflösen (nur Ping-Ziele mit `allow_hostnames`) | sich die Auflösung ändert | [ping.md](ping.md#websites-gezielt-testen) |
 | `platform/` | Alles Betriebssystem-Spezifische (Ping, Router, VPN, DNS-Server der Karte) | Windows- oder Linux-Verhalten | [ping.md](ping.md), [netzwerk.md](netzwerk.md) |
 | `storage/` | Einziger Datenbankzugriff, Migrationen | sich das Schema ändert | [datenmodell.md](datenmodell.md) |
 | `logsetup.py` | Logging in Konsole (stderr) und Datei | selten | – |
@@ -59,7 +61,7 @@ flowchart LR
 |---|---|
 | Rechte | Ping ohne Admin bzw. root ([ping.md](ping.md)); RootPing braucht nie erhöhte Rechte. |
 | Unterprozesse | Keine. Ping und Router-Erkennung laufen über Betriebssystem-Schnittstellen. |
-| Eingaben | Ping- und DNS-Ziele müssen IPv4-Adressen sein, geprüft beim Start ([ADR-011](adr/011-ping-ziele-nur-ipv4-adressen.md)). |
+| Eingaben | Ping- und DNS-Ziele müssen IPv4-Adressen sein, geprüft beim Start ([ADR-011](adr/011-ping-ziele-adressen-namen-nur-auf-wunsch.md)). |
 | Datenbank | Werte nur über Platzhalter (`?`), nie in SQL-Text eingesetzt. Einzige Ausnahme: die Versionsnummer beim Migrieren, eine aus dem Dateinamen geprüfte Zahl. `STRICT`-Tabellen prüfen Typen. Ein Nur-Lesen-Modus für spätere Werkzeuge ist vorhanden. |
 | Geheimnisse | Keine im Code oder in der Konfiguration. `config.toml` und `*.db` stehen in `.gitignore`, weil sie echte Netzwerkdaten enthalten. |
 | Lieferkette | `uv.lock` mit Hashes, 7 Tage Cooldown, Dependabot mit Cooldown, Actions auf SHA gepinnt, zizmor in der CI. |

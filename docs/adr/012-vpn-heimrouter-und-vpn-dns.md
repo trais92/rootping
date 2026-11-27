@@ -1,6 +1,6 @@
 # ADR-012: Bei VPN den Heimrouter messen und DNS nur über den VPN-DNS
 
-- **Status:** vorgeschlagen (Sprint 1, von Claude im Rahmen der freigegebenen Autonomie getroffen; Kai prüft im Review)
+- **Status:** angenommen (Kai, 27.11.2026)
 - **Datum:** 2026-11-27
 
 ## Kontext

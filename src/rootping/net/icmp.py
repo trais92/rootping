@@ -14,9 +14,9 @@ from rootping import platform
 async def echo(target: str, timeout: float) -> float | None:
     """Sendet ein ICMP-Echo an ``target`` und wartet höchstens ``timeout`` Sekunden.
 
-    Ziele müssen IPv4-Adressen sein, keine Namen. So hängt eine Ping-Messung
-    nie vom DNS ab und eine DNS-Störung sieht nicht wie Paketverlust aus
-    (ADR-011).
+    Ziele müssen IPv4-Adressen sein, keine Namen. So hängt ein Echo nie vom
+    DNS ab und eine DNS-Störung sieht nicht wie Paketverlust aus (ADR-011).
+    Namensziele übersetzt die Ping-Probe vorher selbst (``net/resolve.py``).
 
     Args:
         target: IPv4-Adresse, z. B. ``"1.1.1.1"``.
