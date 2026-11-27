@@ -4,13 +4,21 @@ Pro Runde (Standard alle 30 s) wird jeder Server einmal nach einem festen
 Namen gefragt (Standard ``example.com``). Ziele:
 
 - ``"gateway"``: der Router selbst (die meisten Heimrouter leiten DNS weiter).
-- ``"system"``: der DNS-Server des Betriebssystems.
+- ``"system"``: der DNS-Server, den das Betriebssystem gerade wirklich benutzt.
+  Unter Windows ist das der DNS-Server des Adapters, über den der
+  Internetverkehr läuft (bei aktivem VPN also der des VPN), sonst der erste
+  Eintrag der Systemeinstellungen (Linux: ``/etc/resolv.conf``).
 - IPv4-Adressen, z. B. ``"1.1.1.1"`` als öffentlicher Vergleich.
 
 ``gateway`` und ``system`` werden vor jeder Runde in Adressen übersetzt und
 als Adresse gespeichert. Ob eine Zeile den Router-DNS betrifft, erkennt man am
 Vergleich mit ``network_contexts.gateway``. Zeigen zwei Ziele auf dieselbe
-Adresse, wird sie nur einmal gemessen. Hintergrund: ``docs/dns.md``.
+Adresse, wird sie nur einmal gemessen.
+
+**VPN:** Viele VPNs (z. B. NordVPN) blockieren DNS-Anfragen an fremde Server.
+Router und ``1.1.1.1`` würden dann jede Runde ``timeout`` melden, obwohl
+alles funktioniert. Deshalb wird bei aktivem VPN standardmäßig nur ``system``
+gemessen (``only_system_with_vpn``). Hintergrund: ``docs/dns.md`` und ADR-012.
 """
 
 import ipaddress
@@ -55,6 +63,7 @@ class DnsSettings(ProbeSettings):
         query: Name, der abgefragt wird (A-Eintrag).
         interval: Sekunden pro Runde.
         timeout: Sekunden bis eine Abfrage als ``timeout`` gilt.
+        only_system_with_vpn: Bei aktivem VPN nur ``system`` messen (siehe Modul-Docstring).
     """
 
     targets: list[Annotated[str, AfterValidator(_dns_target)]] = Field(
@@ -63,6 +72,7 @@ class DnsSettings(ProbeSettings):
     query: str = Field(default="example.com", min_length=1)
     interval: float = Field(default=30, gt=0)
     timeout: float = Field(default=3, gt=0, le=30)
+    only_system_with_vpn: bool = True
 
 
 class DnsProbe(Probe[DnsSettings]):
@@ -82,13 +92,13 @@ class DnsProbe(Probe[DnsSettings]):
         Args:
             settings: Abschnitt ``[probes.dns_lookup]`` der Konfiguration.
             query: Funktion für eine Abfrage; Standard :func:`rootping.net.dns_query.query`.
-            route: Router-Erkennung; Standard :func:`rootping.platform.default_route`.
+            route: Router-Erkennung; Standard :func:`rootping.platform.current_network`.
             system_nameserver: DNS-Server des Systems; Standard
                 :func:`rootping.net.dns_query.system_nameserver`.
         """
         super().__init__(settings)
         self._query = query or dns_query.query
-        self._route = route or platform.default_route
+        self._route = route or platform.current_network
         self._system_nameserver = system_nameserver or dns_query.system_nameserver
 
     @override
@@ -96,20 +106,30 @@ class DnsProbe(Probe[DnsSettings]):
         """Übersetzt ``gateway`` und ``system`` in Adressen; doppelte Adressen fallen weg.
 
         Lässt sich ein Platzhalter nicht übersetzen (kein Router, kein System-DNS),
-        bleibt er stehen; :meth:`measure` meldet dann einen Fehler.
+        bleibt er stehen; :meth:`measure` meldet dann einen Fehler. Bei aktivem
+        VPN bleibt mit ``only_system_with_vpn`` nur ``system`` übrig.
         """
+        context = self._route()
+        wanted = list(self.settings.targets)
+        if context is not None and context.vpn and self.settings.only_system_with_vpn:
+            wanted = [SYSTEM]
         resolved: list[str] = []
-        for target in self.settings.targets:
+        for target in wanted:
             address: str | None = target
             if target == GATEWAY:
-                context = self._route()
                 address = context.gateway if context else None
             elif target == SYSTEM:
-                address = self._system_nameserver()
+                address = self._system_dns(context)
             entry = address or target
             if entry not in resolved:
                 resolved.append(entry)
         return resolved
+
+    def _system_dns(self, context: platform.NetworkContext | None) -> str | None:
+        """DNS-Server des aktiven Adapters, sonst der erste aus den Systemeinstellungen."""
+        if context is not None and context.dns_servers:
+            return context.dns_servers[0]
+        return self._system_nameserver()
 
     @override
     async def measure(self, target: str) -> ProbeResult:
@@ -121,6 +141,7 @@ class DnsProbe(Probe[DnsSettings]):
 
         Returns:
             Das Ergebnis; ``loss_pct``, ``jitter_ms`` und ``max_ms`` bleiben leer.
+            Bei ``error="blocked"`` steht trotzdem die Antwortzeit in ``latency_ms``.
         """
         ts = utc_now()
         if target == GATEWAY:
@@ -130,5 +151,7 @@ class DnsProbe(Probe[DnsSettings]):
         try:
             latency = await self._query(target, self.settings.query, self.settings.timeout)
         except dns_query.DnsQueryError as err:
-            return ProbeResult(self.name, target, ts, ok=False, error=err.code)
+            return ProbeResult(
+                self.name, target, ts, ok=False, latency_ms=err.latency_ms, error=err.code
+            )
         return ProbeResult(self.name, target, ts, ok=True, latency_ms=latency)

@@ -44,7 +44,7 @@
 Zielplattformen: **Windows und Linux**. RootPing selbst (Messungen, Erkennung, Agent, MCP) läuft auf beiden. Das Störungslabor bleibt in Linux-Containern, denn `tc netem` gibt es nur unter Linux; unter Windows läuft es über Docker Desktop (WSL2).
 
 **Was Windows konkret bedeutet:**
-- Plattformabhängiges ist in einem kleinen Modul gekapselt (`platform/windows.py`, `platform/linux.py`). Das betrifft vor allem die **Gateway-Erkennung** (Linux: `/proc/net/route`, Windows: `GetBestRoute`, beides ohne Unterprozess, siehe [ping.md](ping.md)).
+- Plattformabhängiges ist in einem kleinen Modul gekapselt (`platform/windows.py`, `platform/linux.py`). Das betrifft vor allem die **Gateway-Erkennung** (Linux: `/proc/net/route`, Windows: `GetAdaptersAddresses` + `GetBestRoute`, beides ohne Unterprozess, siehe [netzwerk.md](netzwerk.md)).
 - **Ping ohne Adminrechte:** unter Windows über die Windows-ICMP-API wie `ping.exe` (ADR-006). Ein kurzer Spike in Sprint 1 auf Kais PC ohne Admin bestätigt das. Notlösung: System-`ping` aufrufen.
 - Dateipfade (Datenbank, Konfiguration) über `platformdirs`, nicht fest verdrahtet.
 - CI testet jeden PR auf **Windows und Linux**.

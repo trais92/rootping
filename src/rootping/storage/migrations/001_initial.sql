@@ -3,13 +3,14 @@
 -- STRICT: SQLite prüft die Spaltentypen und lehnt z. B. Text in einer REAL-Spalte ab.
 
 -- In welchem Netz gemessen wurde. Ein bekanntes Netz (gleicher Router, gleiche
--- Netzwerkkarte) bekommt beim Wiederkehren dieselbe Zeile.
+-- Netzwerkkarte, gleiches VPN) bekommt beim Wiederkehren dieselbe Zeile.
 CREATE TABLE network_contexts (
     id         INTEGER PRIMARY KEY,
-    gateway    TEXT NOT NULL,
-    interface  TEXT NOT NULL,
+    gateway    TEXT NOT NULL,                             -- Heimrouter, auch bei aktivem VPN
+    interface  TEXT NOT NULL,                             -- Netzwerkkarte zum Heimrouter
+    vpn        TEXT NOT NULL DEFAULT '',                  -- VPN-Adapter oder leer
     first_seen TEXT NOT NULL,
-    UNIQUE (gateway, interface)
+    UNIQUE (gateway, interface, vpn)
 ) STRICT;
 
 -- Eine Zeile pro Messrunde und Ziel (Zusammenfassung, nicht jedes Paket).

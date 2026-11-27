@@ -37,7 +37,8 @@ Ungültige Konfiguration (C:\Users\kai\AppData\Local\rootping\config.toml):
 | `probes.ping_gateway.targets` | `["auto"]` | `"auto"` = Router erkennen, sonst IPv4-Adressen |
 | `probes.ping_internet.targets` | `["1.1.1.1", "9.9.9.9"]` | nur IPv4-Adressen ([ADR-011](adr/011-ping-ziele-nur-ipv4-adressen.md)) |
 | `probes.dns_lookup.targets` | `["gateway", "system", "1.1.1.1"]` | siehe [dns.md](dns.md) |
-| `probes.dns_lookup.query` | `"example.com"` | abgefragter Name |
+| `probes.dns_lookup.query` | `"example.com"` | abgefragter Name; blockt ein Pi-hole ihn, meldet RootPing `blocked` |
+| `probes.dns_lookup.only_system_with_vpn` | `true` | bei aktivem VPN nur `system` messen ([dns.md](dns.md#vpn)) |
 
 Die Schwellen für „auffällig“ und „Störung“ ([diagnose.md](diagnose.md)) kommen in Sprint 3 als Abschnitt `[thresholds]` dazu.
 

@@ -47,7 +47,7 @@ class EventType(StrEnum):
     GAP = "gap"
     """Messlücke, z. B. nach dem Ruhezustand."""
     NETWORK_CHANGE = "network_change"
-    """Router oder Netzwerkkarte haben sich geändert (anderes WLAN, VPN)."""
+    """Router, Netzwerkkarte oder VPN haben sich geändert (anderes WLAN, VPN an/aus)."""
 
 
 class MigrationError(RuntimeError):
@@ -182,7 +182,7 @@ class Storage:
         """Gibt die ID des Netzwerk-Kontexts zurück und legt ihn bei Bedarf an.
 
         Args:
-            context: Router und Netzwerkkarte.
+            context: Router, Netzwerkkarte und VPN.
             seen_at: Zeitpunkt, an dem der Kontext beobachtet wurde (für ``first_seen``).
 
         Returns:
@@ -190,13 +190,13 @@ class Storage:
         """
         with self._transaction():
             self._conn.execute(
-                "INSERT INTO network_contexts (gateway, interface, first_seen) VALUES (?, ?, ?) "
-                "ON CONFLICT (gateway, interface) DO NOTHING",
-                (context.gateway, context.interface, to_iso(seen_at)),
+                "INSERT INTO network_contexts (gateway, interface, vpn, first_seen) "
+                "VALUES (?, ?, ?, ?) ON CONFLICT (gateway, interface, vpn) DO NOTHING",
+                (context.gateway, context.interface, context.vpn, to_iso(seen_at)),
             )
             row = self._conn.execute(
-                "SELECT id FROM network_contexts WHERE gateway = ? AND interface = ?",
-                (context.gateway, context.interface),
+                "SELECT id FROM network_contexts WHERE gateway = ? AND interface = ? AND vpn = ?",
+                (context.gateway, context.interface, context.vpn),
             ).fetchone()
         return int(row["id"])
 

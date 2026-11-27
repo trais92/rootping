@@ -30,7 +30,7 @@ flowchart TD
 | **Takt** | Eine Schleife pro Probe. Runde *n* startet *n* × `interval` Sekunden nach dem Start (`loop.time()`). | Kein Auseinanderlaufen, auch wenn eine Runde länger dauert als das Intervall. Eine Ping-Runde dauert 10 s plus Timeout des letzten Echos, Runden überlappen sich also kurz. Das ist gewollt. |
 | **Sicherheitsnetz** | Jede Messung hat ein Zeitlimit von `interval + timeout`. Ausnahme oder Zeitüberschreitung → Ergebnis mit `error = "probe_error"`, Details im Log. | Eine kaputte Probe darf die anderen nie anhalten. |
 | **Messlücken** | Ein Wächter vergleicht jede Sekunde die Wanduhr (`time.time()`). Springt sie um mehr als `gap_seconds` (Standard 30), wird ein Ereignis `gap` gespeichert. Verpasste Runden werden übersprungen, nicht nachgeholt. | Nach dem Ruhezustand soll keine Störung gemeldet werden, sondern eine Lücke. Die Wanduhr läuft im Ruhezustand weiter, der asyncio-Takt unter Linux nicht ([tech-stack.md](tech-stack.md) 3.7). |
-| **Netzwerk-Kontext** | Vor jeder Runde wird der Router erkannt. Ändert er sich (anderes WLAN, VPN, Kabel gezogen), wird ein Ereignis `network_change` mit altem und neuem Kontext gespeichert. | Die spätere Störungserkennung vergleicht nur Messungen aus demselben Netz. |
+| **Netzwerk-Kontext** | Vor jeder Runde werden Heimrouter und VPN erkannt ([netzwerk.md](netzwerk.md)). Ändert sich etwas (anderes WLAN, VPN an/aus, Kabel gezogen), wird ein Ereignis `network_change` mit altem und neuem Kontext gespeichert. | Die spätere Störungserkennung vergleicht nur Messungen aus demselben Netz. |
 | **Speichern** | Nur der Scheduler ruft `storage` auf, eine Transaktion pro Runde. | Ein einziger Schreiber, keine Sperrkonflikte. |
 
 ## Ausgabe in der Konsole

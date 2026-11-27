@@ -1,4 +1,4 @@
-"""Tests für den Linux-Teil: Routing-Tabelle lesen, Rechte-Meldung, echter Loopback-Ping."""
+"""Tests für den Linux-Teil: Routing-Tabelle, Tunnel-Erkennung, Rechte-Meldung, Loopback-Ping."""
 
 import sys
 
@@ -13,36 +13,45 @@ from rootping.platform import linux  # noqa: E402 - erst nach der Plattform-Prü
 HEADER = "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT\n"
 
 
-def test_default_route_is_found() -> None:
+def test_default_gateway_is_found() -> None:
     text = (
         HEADER
         + "eth0\t00000000\t01B2A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n"
         + "eth0\t00B2A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n"
     )
-    ctx = linux.parse_proc_net_route(text)
-    assert ctx is not None
-    assert (ctx.gateway, ctx.interface) == ("192.168.178.1", "eth0")
+    assert linux.parse_default_gateways(text) == {"eth0": ("192.168.178.1", 100)}
 
 
-def test_lowest_metric_wins() -> None:
+def test_each_interface_keeps_its_lowest_metric() -> None:
     text = (
         HEADER
         + "wlan0\t00000000\t0100A8C0\t0003\t0\t0\t600\t00000000\t0\t0\t0\n"
-        + "eth0\t00000000\t01B2A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n"
+        + "eth0\t00000000\t01B2A8C0\t0003\t0\t0\t200\t00000000\t0\t0\t0\n"
+        + "eth0\t00000000\t02B2A8C0\t0003\t0\t0\t100\t00000000\t0\t0\t0\n"
     )
-    ctx = linux.parse_proc_net_route(text)
-    assert ctx is not None
-    assert ctx.interface == "eth0"
+    assert linux.parse_default_gateways(text) == {
+        "wlan0": ("192.168.0.1", 600),
+        "eth0": ("192.168.178.2", 100),
+    }
 
 
-def test_no_default_route_means_no_network() -> None:
+def test_routes_that_are_not_default_routes_are_ignored() -> None:
     text = HEADER + "eth0\t00B2A8C0\t00000000\t0001\t0\t0\t100\t00FFFFFF\t0\t0\t0\n"
-    assert linux.parse_proc_net_route(text) is None
+    assert linux.parse_default_gateways(text) == {}
 
 
 def test_inactive_default_route_is_ignored() -> None:
     text = HEADER + "eth0\t00000000\t01B2A8C0\t0002\t0\t0\t100\t00000000\t0\t0\t0\n"
-    assert linux.parse_proc_net_route(text) is None
+    assert linux.parse_default_gateways(text) == {}
+
+
+def test_loopback_is_not_a_tunnel() -> None:
+    # "lo" hat den ARP-Typ 772 (Loopback), kein Tunnel.
+    assert linux.is_tunnel("lo") is False
+
+
+def test_unknown_interface_is_not_a_tunnel() -> None:
+    assert linux.is_tunnel("gibt-es-nicht0") is False
 
 
 def test_permission_help_explains_the_fix() -> None:
@@ -52,8 +61,8 @@ def test_permission_help_explains_the_fix() -> None:
     assert "/etc/sysctl.d/" in text
 
 
-def test_default_route_on_this_machine_does_not_crash() -> None:
-    ctx = linux.default_route()
+def test_current_network_on_this_machine_does_not_crash() -> None:
+    ctx = linux.current_network()
     assert ctx is None or ctx.gateway.count(".") == 3
 
 

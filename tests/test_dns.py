@@ -22,7 +22,7 @@ from rootping.probes.dns import GATEWAY, SYSTEM, DnsProbe, DnsSettings
 
 @dataclass
 class FakeDnsServer:
-    """Kleiner UDP-DNS-Server für Tests. ``mode``: ok, nxdomain, servfail, silent."""
+    """Kleiner UDP-DNS-Server für Tests. ``mode``: ok, blocked, nxdomain, servfail, silent."""
 
     mode: str = "ok"
     port: int = 0
@@ -46,6 +46,9 @@ class _Protocol(asyncio.DatagramProtocol):
             response.set_rcode(dns.rcode.NXDOMAIN)
         elif self.server.mode == "servfail":
             response.set_rcode(dns.rcode.SERVFAIL)
+        elif self.server.mode == "blocked":  # so antwortet Pi-hole auf gesperrte Namen
+            name = request.question[0].name
+            response.answer.append(dns.rrset.from_text(name, 2, "IN", "A", "0.0.0.0"))
         else:
             name = request.question[0].name
             response.answer.append(dns.rrset.from_text(name, 60, "IN", "A", "192.0.2.10"))
@@ -80,6 +83,14 @@ async def test_server_errors_have_fixed_codes(
     with pytest.raises(DnsQueryError) as info:
         await dns_query.query("127.0.0.1", "example.com", 2, port=fake_dns.port)
     assert info.value.code == code
+
+
+async def test_blocked_name_is_reported_with_latency(fake_dns: FakeDnsServer) -> None:
+    fake_dns.mode = "blocked"
+    with pytest.raises(DnsQueryError) as info:
+        await dns_query.query("127.0.0.1", "example.com", 2, port=fake_dns.port)
+    assert info.value.code == "blocked"
+    assert info.value.latency_ms is not None
 
 
 async def test_silent_server_is_a_timeout(fake_dns: FakeDnsServer) -> None:
@@ -160,3 +171,31 @@ async def test_measure_success_and_error() -> None:
     bad = await probe.measure("192.168.178.1")
     assert (ok.ok, ok.latency_ms, ok.loss_pct, ok.error) == (True, 12.5, None, None)
     assert (bad.ok, bad.latency_ms, bad.error) == (False, None, "timeout")
+
+
+async def test_blocked_answer_keeps_latency() -> None:
+    async def blocked(server: str, name: str, timeout: float) -> float:
+        raise DnsQueryError("blocked", 4.0)
+
+    result = await make_probe(query=blocked).measure("192.168.178.28")
+    assert (result.ok, result.latency_ms, result.error) == (False, 4.0, "blocked")
+
+
+def test_system_uses_dns_of_active_adapter() -> None:
+    ctx = NetworkContext("192.168.178.1", "Ethernet 2", dns_servers=("192.168.178.28",))
+    assert make_probe(route=lambda: ctx).targets() == ["192.168.178.1", "192.168.178.28", "1.1.1.1"]
+
+
+def test_with_vpn_only_the_vpn_dns_is_measured() -> None:
+    ctx = NetworkContext(
+        "192.168.178.1", "Ethernet 2", vpn="NordLynx", dns_servers=("103.86.96.100",)
+    )
+    assert make_probe(route=lambda: ctx).targets() == ["103.86.96.100"]
+
+
+def test_vpn_filter_can_be_switched_off() -> None:
+    ctx = NetworkContext(
+        "192.168.178.1", "Ethernet 2", vpn="NordLynx", dns_servers=("103.86.96.100",)
+    )
+    probe = make_probe(route=lambda: ctx, settings=DnsSettings(only_system_with_vpn=False))
+    assert probe.targets() == ["192.168.178.1", "103.86.96.100", "1.1.1.1"]

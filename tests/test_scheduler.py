@@ -64,7 +64,7 @@ async def test_network_change_is_recorded_once(storage: Storage) -> None:
         await sched.run_round(probe)
     events = storage.events()
     assert [e["type"] for e in events] == ["network_change", "network_change"]
-    assert events[0]["details"]["to"] == {"gateway": "10.8.0.1", "interface": "tun0"}
+    assert events[0]["details"]["to"] == {"gateway": "10.8.0.1", "interface": "tun0", "vpn": ""}
     assert events[1]["details"]["to"] is None  # Netz weg
     rows = storage.recent_measurements(limit=10)
     assert rows[0]["context_id"] is None

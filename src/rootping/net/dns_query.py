@@ -13,6 +13,10 @@ Die Fehlerarten entsprechen der Spalte ``measurements.error``
 ``noanswer``   Name existiert, hat aber keinen A-Eintrag
 ``servfail``   Server meldet einen Fehler (SERVFAIL, REFUSED …)
 ``dns_error``  Sonstiger DNS-Fehler (z. B. kaputte Antwort)
+``blocked``    Antwort kam, zeigt aber nur auf ``0.0.0.0`` o. Ä.: Ein
+               Werbeblocker (z. B. Pi-hole) blockiert den abgefragten Namen.
+               Der Server funktioniert, die Messung sagt aber nichts über
+               eine echte Auflösung; Abhilfe: ``query`` in der Konfiguration ändern.
 =============  =========================================================
 """
 
@@ -23,22 +27,28 @@ import dns.asyncresolver
 import dns.exception
 import dns.resolver
 
+BLOCKED_ADDRESSES = frozenset({"0.0.0.0", "127.0.0.1"})
+"""Antworten, mit denen DNS-Werbeblocker einen Namen sperren (Pi-hole: ``0.0.0.0``)."""
+
 
 class DnsQueryError(Exception):
     """Die DNS-Abfrage ist fehlgeschlagen.
 
     Attributes:
         code: Feste Fehlerart, z. B. ``"timeout"`` (siehe Modul-Docstring).
+        latency_ms: Antwortzeit, falls trotz Fehler eine Antwort kam (``blocked``), sonst ``None``.
     """
 
-    def __init__(self, code: str) -> None:
+    def __init__(self, code: str, latency_ms: float | None = None) -> None:
         """Merkt sich die Fehlerart.
 
         Args:
             code: Feste Fehlerart.
+            latency_ms: Antwortzeit, falls eine Antwort kam.
         """
         super().__init__(code)
         self.code = code
+        self.latency_ms = latency_ms
 
 
 async def query(server: str, name: str, timeout: float, port: int = 53) -> float:
@@ -68,7 +78,7 @@ async def query(server: str, name: str, timeout: float, port: int = 53) -> float
     loop = asyncio.get_running_loop()
     start = loop.time()
     try:
-        await resolver.resolve(name, "A", search=False)
+        answer = await resolver.resolve(name, "A", search=False)
     except dns.exception.Timeout as err:
         raise DnsQueryError("timeout") from err
     except dns.resolver.NXDOMAIN as err:
@@ -79,7 +89,11 @@ async def query(server: str, name: str, timeout: float, port: int = 53) -> float
         raise DnsQueryError("servfail") from err
     except dns.exception.DNSException as err:
         raise DnsQueryError("dns_error") from err
-    return (loop.time() - start) * 1000
+    latency = (loop.time() - start) * 1000
+    addresses = {record.to_text() for record in answer}
+    if addresses and addresses <= BLOCKED_ADDRESSES:
+        raise DnsQueryError("blocked", latency)
+    return latency
 
 
 def system_nameserver() -> str | None:

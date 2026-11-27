@@ -24,7 +24,7 @@ def fake_network(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 
     monkeypatch.setattr(rootping.platform, "echo", echo)
     monkeypatch.setattr(
-        rootping.platform, "default_route", lambda: NetworkContext("192.168.1.1", "eth0")
+        rootping.platform, "current_network", lambda: NetworkContext("192.168.1.1", "eth0")
     )
     monkeypatch.setattr(rootping.platform, "ping_permission_problem", lambda: None)
 
@@ -90,6 +90,25 @@ def test_check_reports_router_and_test_pings(tmp_path: Path) -> None:
     assert "5.0 ms, 5.0 ms, 5.0 ms" in result.output
     assert "Test-DNS" in result.output
     assert "7.0 ms" in result.output
+
+
+@pytest.mark.usefixtures("fake_network")
+def test_check_explains_vpn_and_blocked_test_name(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    vpn = NetworkContext("192.168.1.1", "Ethernet 2", vpn="NordLynx", dns_servers=("10.5.0.2",))
+    monkeypatch.setattr(rootping.platform, "current_network", lambda: vpn)
+
+    async def blocked(server: str, name: str, timeout: float, port: int = 53) -> float:
+        raise rootping.net.dns_query.DnsQueryError("blocked", 3.0)
+
+    monkeypatch.setattr(rootping.net.dns_query, "query", blocked)
+    result = runner.invoke(cli.app, ["check", "--config", str(write_config(tmp_path))])
+    assert result.exit_code == 0, result.output
+    assert "VPN:           aktiv über NordLynx" in result.output
+    assert "DNS-Server:    10.5.0.2" in result.output
+    assert "10.5.0.2" in result.output.split("Test-DNS")[1]
+    assert "WARNUNG" in result.output
 
 
 @pytest.mark.usefixtures("fake_network")

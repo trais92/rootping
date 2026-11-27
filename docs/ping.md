@@ -43,9 +43,8 @@ sequenceDiagram
 
 `platform/windows.py` ruft `IcmpSendEcho2` aus der System-Bibliothek `Iphlpapi.dll` über `ctypes` auf. Das ist derselbe Weg, den `ping.exe` nutzt, und er braucht keine Adminrechte. Der Aufruf blockiert, deshalb läuft er mit `asyncio.to_thread` in einem Hilfs-Thread.
 
-- Windows liefert **ganze Millisekunden**; unter 1 ms erscheint 0 (wie „<1ms“ bei `ping.exe`).
-- Der Router wird mit `GetBestRoute` ermittelt: „Über welchen nächsten Hop ginge ein Paket nach 1.1.1.1?“. Es wird dabei kein Paket verschickt.
-- Bei manchen VPNs gibt es keinen Router im Heimnetz-Sinn (nächster Hop `0.0.0.0`). Dann meldet RootPing „kein Router“ (`no_gateway`).
+- Windows liefert **ganze Millisekunden**; unter 1 ms erscheint 0 (wie „<1ms“ bei `ping.exe`). Im Heimnetz antwortet der Router meist in unter 1 ms. Unter Windows stehen bei `ping_gateway` deshalb oft `0.0 ms` und Jitter `0.0`. Das ist kein Fehler, sondern die Auflösung der Windows-Schnittstelle (im Windows-Test bestätigt). Für Spiele relevante Werte (ab einigen ms) sind davon nicht betroffen. Unter Linux misst RootPing auf Mikrosekunden genau.
+- Der Router wird mit `GetAdaptersAddresses` und `GetBestRoute` ermittelt, auch bei aktivem VPN der Heimrouter ([netzwerk.md](netzwerk.md)).
 
 ### Test ohne Adminrechte (offener Punkt aus Sprint 0)
 
@@ -59,11 +58,11 @@ uv sync
 uv run rootping check
 ```
 
-Erwartet: `Ping-Rechte: OK`, der Router mit Adresse und Netzwerkkarte, je drei Antwortzeiten für Router und 1.1.1.1 sowie DNS-Antwortzeiten. Kommen dort Zahlen, ist ADR-006 bestätigt und das Risiko im Projektplan erledigt.
+Erwartet: `Ping-Rechte: OK`, der Router mit Adresse und Netzwerkkarte, VPN und DNS-Server, je drei Antwortzeiten für Router und 1.1.1.1 sowie DNS-Antwortzeiten. Kommen dort Zahlen, ist ADR-006 bestätigt und das Risiko im Projektplan erledigt.
 
 ## Linux: Ping-Socket des Kernels
 
-`platform/linux.py` nutzt `icmplib` mit `privileged=False`. Dann baut der Kernel die ICMP-Pakete (Datagram-Socket), und es braucht kein root. Der Router kommt aus `/proc/net/route` (Standardroute mit der kleinsten Metrik).
+`platform/linux.py` nutzt `icmplib` mit `privileged=False`. Dann baut der Kernel die ICMP-Pakete (Datagram-Socket), und es braucht kein root. Der Router kommt aus `/proc/net/route`, bei VPN mit Erkennung des Tunnels ([netzwerk.md](netzwerk.md)).
 
 ### Wenn Ping nicht erlaubt ist
 

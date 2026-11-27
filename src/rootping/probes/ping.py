@@ -32,7 +32,7 @@ type EchoFunc = Callable[[str, float], Coroutine[Any, Any, float | None]]
 """Signatur von :func:`rootping.net.icmp.echo`; Tests setzen hier eine Fälschung ein."""
 
 type RouteFunc = Callable[[], platform.NetworkContext | None]
-"""Signatur von :func:`rootping.platform.default_route`; Tests setzen hier eine Fälschung ein."""
+"""Signatur von :func:`rootping.platform.current_network`; Tests setzen hier eine Fälschung ein."""
 
 
 def _ipv4(value: str) -> str:
@@ -194,10 +194,10 @@ class PingGatewayProbe(PingProbe):
             settings: Abschnitt ``[probes.ping_gateway]`` der Konfiguration.
             echo: Funktion für ein einzelnes Echo; nur Tests ändern sie.
             route: Funktion, die den Router erkennt; Standard
-                :func:`rootping.platform.default_route`. Nur Tests ändern sie.
+                :func:`rootping.platform.current_network`. Nur Tests ändern sie.
         """
         super().__init__(settings, echo)
-        self._route = route or platform.default_route
+        self._route = route or platform.current_network
 
     @override
     def targets(self) -> list[str]:

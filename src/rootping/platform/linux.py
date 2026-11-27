@@ -3,11 +3,13 @@
 - **Ping:** über den ICMP-Datagram-Socket des Kernels mit ``icmplib``
   (``privileged=False``). Das braucht keine root-Rechte, aber der Kernel muss
   die Gruppe des Benutzers in ``net.ipv4.ping_group_range`` erlauben (Befund B3).
-- **Router:** aus ``/proc/net/route`` gelesen, ohne Unterprozess.
+- **Router und VPN:** aus ``/proc/net/route``, ``/sys/class/net`` und der
+  Routing-Entscheidung des Kernels, ohne Unterprozess (``docs/netzwerk.md``).
 
 Hintergrund: ADR-006 und ``docs/ping.md``.
 """
 
+import fcntl
 import os
 import socket
 import struct
@@ -19,10 +21,24 @@ if sys.platform != "linux":  # pragma: no cover - Schutz vor falscher Verwendung
 
 import icmplib
 
-from rootping.platform.common import NetworkContext, PingPermissionError
+from rootping.platform.common import Interface, NetworkContext, PingPermissionError, choose_network
 
 PROC_NET_ROUTE = Path("/proc/net/route")
 PING_GROUP_RANGE = Path("/proc/sys/net/ipv4/ping_group_range")
+SYS_CLASS_NET = Path("/sys/class/net")
+
+# Öffentliche Adresse, um die aktive Route zu erfragen (es wird nichts gesendet).
+_ROUTE_PROBE_ADDRESS = "1.1.1.1"
+
+# ioctl-Nummer aus <linux/sockios.h>: IPv4-Adresse einer Karte abfragen.
+_SIOCGIFADDR = 0x8915
+
+# Karten-Typen aus <linux/if_arp.h>, die Tunnel sind: PPP (512), IPIP (768),
+# SIT (776), GRE (778), IP6GRE (823) und "keine Hardware" (65534: tun, WireGuard).
+_TUNNEL_ARP_TYPES = frozenset({512, 768, 776, 778, 823, 65534})
+
+# Metrik für Karten ohne eigene Standardroute (werden nie als Heimrouter gewählt).
+_NO_ROUTE_METRIC = 1_000_000
 
 # Flags aus <linux/route.h>: Route ist aktiv (RTF_UP) und führt über einen Router (RTF_GATEWAY).
 _RTF_UP = 0x0001
@@ -78,34 +94,54 @@ def ping_permission_problem() -> str | None:
     return None
 
 
-def default_route() -> NetworkContext | None:
-    """Ermittelt Router und Netzwerkkarte der Standardroute.
+def current_network() -> NetworkContext | None:
+    """Ermittelt Heimrouter, Netzwerkkarte und ob ein VPN aktiv ist.
+
+    Rohdaten: Standard-Gateways aus ``/proc/net/route``, die Karte, über die
+    eine Verbindung ins Internet ginge (:func:`_active_interface`), und ob eine
+    Karte ein Tunnel ist (:func:`is_tunnel`). Die Entscheidung trifft
+    :func:`~rootping.platform.common.choose_network`.
 
     Returns:
-        Den Netzwerk-Kontext oder ``None``, wenn es keine Standardroute gibt (kein Netz).
+        Den Netzwerk-Kontext oder ``None`` ohne Netz. DNS-Server pro Karte
+        liefert Linux nicht einfach; sie bleiben leer (``docs/netzwerk.md``).
     """
     try:
-        text = PROC_NET_ROUTE.read_text(encoding="ascii")
+        gateways = parse_default_gateways(PROC_NET_ROUTE.read_text(encoding="ascii"))
     except OSError:
         return None
-    return parse_proc_net_route(text)
+    names = [name for _, name in socket.if_nameindex() if name != "lo"]
+    interfaces = [
+        Interface(
+            name=name,
+            gateway=gateways[name][0] if name in gateways else None,
+            metric=gateways[name][1] if name in gateways else _NO_ROUTE_METRIC,
+            is_tunnel=is_tunnel(name),
+        )
+        for name in names
+    ]
+    return choose_network(interfaces, _active_interface())
 
 
-def parse_proc_net_route(text: str) -> NetworkContext | None:
-    """Liest die Standardroute aus dem Inhalt von ``/proc/net/route``.
+def parse_default_gateways(text: str) -> dict[str, tuple[str, int]]:
+    """Liest die Standard-Gateways aus dem Inhalt von ``/proc/net/route``.
 
     Die Datei hat eine Kopfzeile und dann eine Zeile pro Route. Adressen stehen
     hexadezimal in der Byte-Reihenfolge des Kernels (Little Endian), z. B.
-    ``0102A8C0`` für ``192.168.2.1``. Die Standardroute hat Ziel und Maske
-    ``00000000``. Gibt es mehrere, gewinnt die mit der kleinsten Metrik.
+    ``0102A8C0`` für ``192.168.2.1``. Eine Standardroute hat Ziel und Maske
+    ``00000000``. Hat eine Karte mehrere, gewinnt die mit der kleinsten Metrik.
+
+    Hinweis: VPNs wie WireGuard legen ihre Standardroute oft in eine eigene
+    Routing-Tabelle, die hier nicht erscheint. Deshalb wird die aktive Karte
+    zusätzlich mit :func:`_active_interface` bestimmt.
 
     Args:
         text: Inhalt von ``/proc/net/route``.
 
     Returns:
-        Den Netzwerk-Kontext oder ``None``, wenn keine Standardroute über einen Router führt.
+        Karte → (Gateway-Adresse, Metrik), nur für aktive Routen über einen Router.
     """
-    best: tuple[int, NetworkContext] | None = None
+    result: dict[str, tuple[str, int]] = {}
     for line in text.splitlines()[1:]:
         fields = line.split()
         if len(fields) < 8:
@@ -116,10 +152,65 @@ def parse_proc_net_route(text: str) -> NetworkContext | None:
         if not is_default or flags & (_RTF_UP | _RTF_GATEWAY) != (_RTF_UP | _RTF_GATEWAY):
             continue
         gateway = socket.inet_ntoa(struct.pack("<L", int(gateway_hex, 16)))
-        candidate = (int(metric), NetworkContext(gateway=gateway, interface=iface))
-        if best is None or candidate[0] < best[0]:
-            best = candidate
-    return best[1] if best else None
+        if iface not in result or int(metric) < result[iface][1]:
+            result[iface] = (gateway, int(metric))
+    return result
+
+
+def is_tunnel(name: str) -> bool:
+    """Prüft, ob eine Netzwerkkarte ein VPN- bzw. Tunnel-Adapter ist.
+
+    Erkennt Karten ohne Ethernet-Hardware (WireGuard, tun, PPP, GRE …) am
+    Typ in ``/sys/class/net/<name>/type`` und TAP-Karten an ``tun_flags``.
+
+    Args:
+        name: Name der Karte, z. B. ``"wg0"``.
+
+    Returns:
+        ``True`` für Tunnel-Adapter.
+    """
+    folder = SYS_CLASS_NET / name
+    if (folder / "tun_flags").exists():
+        return True
+    try:
+        arp_type = int((folder / "type").read_text(encoding="ascii").strip())
+    except OSError, ValueError:
+        return False
+    return arp_type in _TUNNEL_ARP_TYPES
+
+
+def _active_interface() -> str | None:
+    """Findet die Karte, über die eine Verbindung ins Internet gerade ginge.
+
+    Trick ohne Unterprozess: Ein UDP-Socket wird mit einer öffentlichen Adresse
+    „verbunden“. Dabei wird kein Paket gesendet, aber der Kernel wählt die
+    Absenderadresse nach seinen Routing-Regeln, auch nach den eigenen Tabellen
+    von VPNs. Die Karte mit dieser Adresse ist die aktive.
+
+    Returns:
+        Name der Karte oder ``None``, wenn es keine Route ins Internet gibt.
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect((_ROUTE_PROBE_ADDRESS, 53))
+            source = probe.getsockname()[0]
+    except OSError:
+        return None
+    for _, name in socket.if_nameindex():
+        if _interface_address(name) == source:
+            return name
+    return None
+
+
+def _interface_address(name: str) -> str | None:
+    """Gibt die IPv4-Adresse einer Karte zurück (``ioctl SIOCGIFADDR``) oder ``None``."""
+    request = struct.pack("256s", name.encode("ascii", errors="replace")[:15])
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            answer = fcntl.ioctl(sock.fileno(), _SIOCGIFADDR, request)
+    except OSError:
+        return None
+    return socket.inet_ntoa(answer[20:24])
 
 
 def _permission_help() -> str:

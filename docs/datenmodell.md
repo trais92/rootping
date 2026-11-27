@@ -33,7 +33,7 @@ erDiagram
 | Tabelle | Inhalt | Wer schreibt |
 |---|---|---|
 | `measurements` | Ergebnis jeder Messrunde | Messungen (Probes) |
-| `network_contexts` | In welchem Netz wurde gemessen (Gateway, Interface) | Messdienst |
+| `network_contexts` | In welchem Netz wurde gemessen (Heimrouter, Netzwerkkarte, VPN) | Messdienst |
 | `events` | Besondere Ereignisse: Messlücke (Ruhezustand), Netzwechsel | Messdienst |
 | `incidents` | Erkannte Störungen (Beginn, Ende, Auslöser) | Störungserkennung |
 | `diagnoses` | Diagnose zu einem Vorfall, von Regeln oder KI | Regel-Baseline, Agent |
@@ -69,6 +69,7 @@ Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X i
 | `no_reply` | Ping | Keine einzige Antwort in der Runde (`ok = 0`, `loss_pct = 100`) |
 | `no_gateway` | Ping, DNS | Kein Router erkannt (kein Netz oder VPN ohne Router) |
 | `timeout`, `nxdomain`, `noanswer`, `servfail`, `dns_error` | DNS | siehe [dns.md](dns.md) |
+| `blocked` | DNS | Testname wird von einem Werbeblocker gesperrt (Antwort `0.0.0.0`); `latency_ms` ist trotzdem gefüllt |
 | `no_system_dns` | DNS | Kein DNS-Server im Betriebssystem eingerichtet |
 | `probe_error` | alle | Fehler im Programm oder Zeitlimit überschritten; Details im Log |
 
@@ -79,11 +80,12 @@ Ein Ping mit teilweisem Verlust ist `ok = 1` ohne `error`; der Verlust steht in 
 | Spalte | Typ | Beispiel | Bedeutung |
 |---|---|---|---|
 | `id` | INTEGER PK | 3 | |
-| `gateway` | TEXT | `192.168.178.1` | Router-Adresse |
-| `interface` | TEXT | `Ethernet` | Netzwerkkarte |
+| `gateway` | TEXT | `192.168.178.1` | Adresse des Heimrouters, auch bei aktivem VPN |
+| `interface` | TEXT | `Ethernet 2` | Netzwerkkarte zum Heimrouter (lesbarer Name) |
+| `vpn` | TEXT, Standard `''` | `NordLynx` | VPN-Karte, über die der Internetverkehr läuft; leer ohne VPN ([netzwerk.md](netzwerk.md)) |
 | `first_seen` | TEXT | `2026-11-26T08:00:00Z` | Wann dieser Kontext zum ersten Mal auftrat |
 
-**Festlegung aus Sprint 1:** `(gateway, interface)` ist eindeutig. Kehrt man in ein bekanntes Netz zurück (z. B. abends wieder ins Heim-WLAN), wird die bestehende Zeile wiederverwendet. So landen alle Messungen aus dem Heimnetz unter einem Kontext.
+**Festlegung aus Sprint 1:** `(gateway, interface, vpn)` ist eindeutig (ADR-012). Kehrt man in ein bekanntes Netz zurück (z. B. abends wieder ins Heim-WLAN), wird die bestehende Zeile wiederverwendet. So landen alle Messungen aus dem Heimnetz unter einem Kontext.
 
 **Warum eine eigene Tabelle?** Gateway und Interface ändern sich selten. Statt sie in jeder Messung zu wiederholen, steht dort nur die Nummer. Ändert sich der Kontext (VPN an, anderes WLAN), entsteht ein Ereignis `network_change` und, falls das Netz neu ist, eine neue Zeile. Die Störungserkennung vergleicht nur Messungen aus demselben Kontext und vermeidet so Fehlalarme.
 

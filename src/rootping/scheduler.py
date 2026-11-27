@@ -15,8 +15,8 @@ damit die Probes selbst klein bleiben (``docs/probes.md``, „Was der Scheduler
 3. **Messlücken:** Ein Wächter vergleicht jede Sekunde die Wanduhr. Springt sie
    weiter als ``gap_seconds`` (z. B. nach dem Ruhezustand), wird ein Ereignis
    ``gap`` gespeichert. Verpasste Runden werden übersprungen, nicht nachgeholt.
-4. **Netzwerk-Kontext:** Vor jeder Runde wird der Router erkannt. Hat er sich
-   geändert, wird ein Ereignis ``network_change`` gespeichert.
+4. **Netzwerk-Kontext:** Vor jeder Runde werden Router und VPN erkannt. Hat
+   sich etwas geändert, wird ein Ereignis ``network_change`` gespeichert.
 5. **Speichern:** Nur der Scheduler ruft ``storage`` auf. Weil alles in einem
    asyncio-Event-Loop läuft, gibt es nie zwei Schreibzugriffe gleichzeitig.
 """
@@ -65,14 +65,14 @@ class Scheduler:
             storage: Geöffnete Datenbank; der Scheduler ist ihr einziger Schreiber.
             gap_seconds: Ab diesem Sprung der Wanduhr (Sekunden) gilt eine Pause als Messlücke.
             route: Funktion, die den aktuellen Router erkennt; Standard
-                :func:`rootping.platform.default_route`. Nur Tests ändern sie.
+                :func:`rootping.platform.current_network`. Nur Tests ändern sie.
             wall_clock: Wanduhr in Sekunden; nur Tests ändern sie.
             on_results: Optionaler Aufruf nach jeder gespeicherten Runde.
         """
         self._probes = list(probes)
         self._storage = storage
         self._gap_seconds = gap_seconds
-        self._route = route or platform.default_route
+        self._route = route or platform.current_network
         self._wall_clock = wall_clock
         self._on_results = on_results
         self._context: object = _NOT_CHECKED
@@ -209,4 +209,4 @@ def _describe(context: NetworkContext | None) -> dict[str, str] | None:
     """Wandelt einen Kontext in ein JSON-taugliches Dictionary für Ereignisse um."""
     if context is None:
         return None
-    return {"gateway": context.gateway, "interface": context.interface}
+    return {"gateway": context.gateway, "interface": context.interface, "vpn": context.vpn}

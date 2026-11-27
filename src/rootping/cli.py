@@ -121,11 +121,20 @@ def check(config: ConfigOption = None) -> None:
         raise typer.Exit(code=3)
     typer.echo("Ping-Rechte:   OK (ohne Admin/root)")
 
-    context = platform.default_route()
+    context = platform.current_network()
     if context is None:
         typer.echo("Router:        nicht gefunden (keine Standardroute, kein Netz?)")
     else:
         typer.echo(f"Router:        {context.gateway} über {context.interface}")
+        if context.vpn:
+            typer.echo(
+                f"VPN:           aktiv über {context.vpn}. Gemessen wird trotzdem der "
+                "Heimrouter oben; DNS nur über den VPN-DNS (docs/netzwerk.md)."
+            )
+        else:
+            typer.echo("VPN:           keins erkannt")
+        if context.dns_servers:
+            typer.echo(f"DNS-Server:    {', '.join(context.dns_servers)}")
 
     asyncio.run(_test_network(settings, context))
 
@@ -147,11 +156,19 @@ async def _test_network(settings: Settings, context: platform.NetworkContext | N
         shown = ", ".join("verloren" if rtt is None else f"{rtt:.1f} ms" for rtt in rtts)
         typer.echo(f"  {target:<15} {shown}")
 
-    dns_probe = DnsProbe(settings.probes.dns_lookup)
+    dns_probe = DnsProbe(settings.probes.dns_lookup, route=lambda: context)
     typer.echo(f"\nTest-DNS (Abfrage {settings.probes.dns_lookup.query}):")
     for target in dns_probe.targets():
         result = await dns_probe.measure(target)
-        shown = f"{result.latency_ms:.1f} ms" if result.ok else f"FEHLER: {result.error}"
+        if result.ok:
+            shown = f"{result.latency_ms:.1f} ms"
+        elif result.error == "blocked":
+            shown = (
+                f"WARNUNG: Antwort nach {result.latency_ms:.1f} ms, aber der Name wird "
+                "blockiert (Pi-hole?). Bitte 'query' in der Konfiguration ändern."
+            )
+        else:
+            shown = f"FEHLER: {result.error}"
         typer.echo(f"  {target:<15} {shown}")
 
 

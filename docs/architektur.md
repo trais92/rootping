@@ -38,7 +38,7 @@ flowchart LR
 | `probes/dns.py` | DNS-Runde: eine Abfrage pro Server | sich die DNS-Messung ändert | [dns.md](dns.md) |
 | `net/icmp.py` | Ein einzelnes Echo, gleich auf beiden Systemen | der Ping-Weg wechselt | [ping.md](ping.md) |
 | `net/dns_query.py` | Eine DNS-Abfrage mit fester Fehlerart | sich die Fehlerarten ändern | [dns.md](dns.md) |
-| `platform/` | Alles Betriebssystem-Spezifische (Ping, Router) | Windows- oder Linux-Verhalten | [ping.md](ping.md) |
+| `platform/` | Alles Betriebssystem-Spezifische (Ping, Router, VPN, DNS-Server der Karte) | Windows- oder Linux-Verhalten | [ping.md](ping.md), [netzwerk.md](netzwerk.md) |
 | `storage/` | Einziger Datenbankzugriff, Migrationen | sich das Schema ändert | [datenmodell.md](datenmodell.md) |
 | `logsetup.py` | Logging in Konsole (stderr) und Datei | selten | – |
 | `timeutil.py` | Zeitstempel in UTC und genau einem Format | nie | [datenmodell.md](datenmodell.md) |

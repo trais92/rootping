@@ -36,8 +36,12 @@ timeout  = 2
 enabled  = true
 targets  = ["gateway", "system", "1.1.1.1"]
 # "gateway" = DNS-Anfrage direkt an den Router
-# "system"  = DNS-Server des Betriebssystems; unter Linux mit systemd-resolved
+# "system"  = DNS-Server, den das System gerade benutzt (Windows: der des aktiven
+#             Adapters, bei VPN also der VPN-DNS); unter Linux mit systemd-resolved
 #             oft der lokale Zwischenspeicher 127.0.0.53, nicht der Router
-query    = "example.com"  # abgefragter Name (A-Eintrag)
+query    = "example.com"  # abgefragter Name (A-Eintrag); blockt ein Pi-hole ihn,
+                          # meldet RootPing "blocked" -> anderen Namen eintragen
 interval = 30
 timeout  = 3
+# Viele VPNs blockieren DNS an fremde Server. true = bei aktivem VPN nur "system" messen.
+only_system_with_vpn = true

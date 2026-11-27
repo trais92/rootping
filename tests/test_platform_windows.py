@@ -45,6 +45,26 @@ async def test_unreachable_documentation_address_is_lost() -> None:
     assert await windows.echo("192.0.2.1", timeout=0.5) is None
 
 
-def test_default_route_does_not_crash() -> None:
-    ctx = windows.default_route()
+def test_current_network_does_not_crash() -> None:
+    ctx = windows.current_network()
     assert ctx is None or ctx.gateway.count(".") == 3
+
+
+def test_adapter_list_matches_best_route() -> None:
+    interfaces, names = windows.list_interfaces()
+    assert {i.name for i in interfaces} == set(names.values())
+    index = windows.best_route_index()
+    assert index is None or index in names or not interfaces
+
+
+@pytest.mark.parametrize(
+    ("if_type", "description", "expected"),
+    [
+        (6, "Intel(R) Ethernet Connection", False),
+        (71, "Intel(R) Wi-Fi 6 AX201", False),
+        (53, "NordLynx Tunnel", True),
+        (6, "TAP-Windows Adapter V9", True),
+    ],
+)
+def test_tunnel_detection(if_type: int, description: str, expected: bool) -> None:
+    assert windows.is_tunnel(if_type, description) is expected
