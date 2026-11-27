@@ -1,0 +1,22 @@
+# Git-Hooks für prek (oder pre-commit, gleiches Format), siehe ADR-007.
+# Einmalig einrichten:  uv tool install prek  &&  prek install
+# Die Hooks nutzen die Werkzeuge aus uv.lock, also dieselben Versionen wie die CI.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+      - id: pyright
+        name: pyright
+        entry: uv run pyright
+        language: system
+        types: [python]
+        pass_filenames: false

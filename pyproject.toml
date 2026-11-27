@@ -1,0 +1,100 @@
+# Projektdefinition von RootPing.
+# Werkzeugwahl und Begründungen: docs/adr/007-werkzeugkette.md und docs/tech-stack.md.
+
+[project]
+name = "rootping"
+version = "0.1.0"
+description = "Schlankes Netzwerk-Diagnose-Tool: misst Ping und DNS, speichert in SQLite, ein Claude-Agent erklärt Störungen."
+readme = "README.md"
+requires-python = ">=3.14"
+authors = [{ name = "Kai" }]
+# Untergrenzen = getestete Minor-Versionen (tech-stack.md, Anhang A).
+# Die genauen Versionen hält uv.lock fest.
+dependencies = [
+    "dnspython>=2.9", # DNS-Messung mit genauen Fehlerarten
+    "icmplib>=3.0.4; sys_platform == 'linux'", # nur der Linux-Ping (ADR-006)
+    "platformdirs>=4.14",
+    "pydantic>=2.14",
+    "pydantic-settings>=2.16",
+    "typer>=0.29,<0.30", # 0.x mit häufigen Breaking Changes, daher Obergrenze
+]
+
+[project.scripts]
+rootping = "rootping.cli:app"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.170",
+    "pyright[nodejs]>=1.1.414",
+    "pytest>=9.2",
+    "pytest-asyncio>=1.5",
+    "pytest-cov>=7.0",
+    "ruff>=0.17",
+    "zizmor>=1.30", # prüft die GitHub-Actions-Workflows auf Sicherheitsprobleme
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+# --- uv ---------------------------------------------------------------------
+[tool.uv]
+# Cooldown: Paketversionen, die jünger als 7 Tage sind, werden ignoriert.
+# Schützt vor kompromittierten Releases (tech-stack.md 3.2 und 3.22).
+exclude-newer = "7 days"
+
+# --- ruff -------------------------------------------------------------------
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+extend-exclude = ["docs"] # Code-Beispiele in der Doku sind Erklärungen, kein Programmcode
+
+[tool.ruff.lint]
+# PLW1514 ist noch eine "Preview"-Regel; nur ausdrücklich genannte Preview-Regeln gelten.
+preview = true
+explicit-preview-rules = true
+# Jede Regelgruppe hat einen Grund (tech-stack.md 3.4):
+select = [
+    "E", "W", "F",  # Grundfehler (pycodestyle, pyflakes)
+    "I",            # sortierte Importe
+    "B",            # typische Fehlerquellen (bugbear)
+    "UP",           # moderne Python-Syntax
+    "SIM",          # einfachere Schreibweisen
+    "N",            # Namenskonventionen
+    "D",            # Docstrings: "kein Code ohne Doku" wird in CI geprüft
+    "ASYNC",        # blockierende Aufrufe in async-Funktionen halten alle Messungen an
+    "RUF",          # u. a. RUF006: Tasks ohne gespeicherte Referenz
+    "DTZ",          # datetime nur mit Zeitzone (Datenmodell: UTC)
+    "T20",          # kein print(): später zerstört es das MCP-Protokoll
+    "PLW1514",      # open() nur mit expliziter Kodierung (Windows/Linux, 3.14/3.15)
+    "S603", "S607", # Unterprozesse nur bewusst freigegeben (nur Traceroute)
+    "PT",           # pytest-Stil
+]
+ignore = [
+    "RUF001", "RUF002", "RUF003", # deutsche Texte mit typografischen Zeichen sind gewollt
+    "ASYNC109", # "timeout" ist bei uns die Wartezeit des Betriebssystems pro Echo, kein asyncio-Timeout
+]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+# Tests dokumentieren sich über ihre Namen; ein Modul-Docstring reicht.
+"tests/**" = ["D100", "D101", "D102", "D103", "D104", "D105", "D107"]
+
+# --- Pyright ----------------------------------------------------------------
+[tool.pyright]
+include = ["src", "tests"]
+pythonVersion = "3.14"
+typeCheckingMode = "standard"
+
+# --- pytest -----------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = ["--strict-markers", "--strict-config"]
+markers = [
+    "loopback: echter Ping an 127.0.0.1 (braucht Ping-Rechte, kein Internet)",
+]
+filterwarnings = ["error"]
