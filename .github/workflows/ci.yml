@@ -46,9 +46,15 @@ jobs:
       - name: Abhängigkeiten exakt nach uv.lock installieren
         run: uv sync --locked
 
-      - name: Ping-Freigabe anzeigen (nur Linux, zur Nachvollziehbarkeit)
+      # Die Ubuntu-Runner von GitHub haben den Kernel-Standard "1 0" (niemand darf
+      # ohne root pingen, Befund B3). Wir geben Ping genau so frei, wie es
+      # docs/ping.md für Nutzer beschreibt; die Tests laufen danach als normaler
+      # Benutzer und prüfen damit den Weg ohne root.
+      - name: Ping ohne root freigeben (nur Linux, wie in docs/ping.md)
         if: runner.os == 'Linux'
-        run: cat /proc/sys/net/ipv4/ping_group_range
+        run: |
+          echo "vorher: $(cat /proc/sys/net/ipv4/ping_group_range)"
+          sudo sysctl -w net.ipv4.ping_group_range="0 2147483647"
 
       - name: Lint (ruff)
         run: uv run ruff check .
