@@ -60,13 +60,18 @@ def _format_result(result: ProbeResult) -> str:
     def ms(value: float | None) -> str:
         return "–" if value is None else f"{value:.1f} ms"
 
+    head = f"{result.probe:<14} {result.target:<15}"
     if not result.ok:
-        return f"{result.probe:<14} {result.target:<15} FEHLER: {result.error}"
-    return (
-        f"{result.probe:<14} {result.target:<15} "
-        f"ø {ms(result.latency_ms):>9}  max {ms(result.max_ms):>9}  "
-        f"Verlust {result.loss_pct or 0:>5.1f} %  Jitter {ms(result.jitter_ms):>9}"
-    )
+        return f"{head} FEHLER: {result.error}"
+    parts = [f"ø {ms(result.latency_ms):>9}"]
+    # Nur Werte zeigen, die es für diese Messart gibt (DNS hat z. B. keinen Verlust).
+    if result.max_ms is not None:
+        parts.append(f"max {ms(result.max_ms):>9}")
+    if result.loss_pct is not None:
+        parts.append(f"Verlust {result.loss_pct:>5.1f} %")
+    if result.jitter_ms is not None:
+        parts.append(f"Jitter {ms(result.jitter_ms):>9}")
+    return f"{head} {'  '.join(parts)}"
 
 
 def _print_results(results: Sequence[ProbeResult]) -> None:

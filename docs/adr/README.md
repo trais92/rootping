@@ -19,5 +19,6 @@ Ein ADR hält **eine** wichtige Entscheidung fest: Was war die Ausgangslage, was
 | [008](008-agent-mit-messages-api.md) | Claude-Agent über die Messages API mit eigener Schleife | angenommen |
 | [009](009-mcp-sdk-2.md) | MCP-Server mit dem offiziellen SDK 2.x, nur stdio, nur lesend | angenommen |
 | [010](010-konfiguration-pydantic-settings.md) | Konfiguration in TOML, geprüft mit pydantic-settings | angenommen |
+| [011](011-ping-ziele-nur-ipv4-adressen.md) | Ping- und DNS-Ziele sind IPv4-Adressen, keine Namen | vorgeschlagen |
 
 Vorlage für neue ADRs: [000-vorlage.md](000-vorlage.md)

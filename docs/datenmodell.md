@@ -1,6 +1,8 @@
 # Datenmodell
 
-> Sprint 0 · Stand 26.11.2026 · gehört zu [projektplan.md](projektplan.md)
+> Sprint 0 · Stand 26.11.2026, ergänzt 27.11.2026 (Sprint 1) · gehört zu [projektplan.md](projektplan.md)
+>
+> **Umgesetzt in Sprint 1** (Migration `001_initial.sql`): `measurements`, `network_contexts`, `events`. Die übrigen Tabellen folgen als eigene Migrationen in den Sprints, die sie brauchen.
 
 RootPing speichert alles in **einer SQLite-Datei**. Dieses Dokument beschreibt, welche Tabellen es gibt, warum sie so aussehen und wie man sie später ändert.
 
@@ -54,9 +56,23 @@ erDiagram
 | `jitter_ms` | REAL, leer erlaubt | 1.8 | Schwankung der Antwortzeit (nur Ping) |
 | `max_ms` | REAL, leer erlaubt | 48.0 | Höchste Antwortzeit in der Runde (nur Ping). Zeigt kurze Lags, die im Mittelwert verschwinden. |
 | `error` | TEXT, leer erlaubt | `timeout` | Fehlerart, z. B. `timeout`, `servfail`, `nxdomain`, `unreachable` |
-| `context_id` | INTEGER FK | 3 | Verweis auf `network_contexts` |
+| `context_id` | INTEGER FK, leer erlaubt | 3 | Verweis auf `network_contexts`; leer, wenn kein Netz erkannt wurde (keine Standardroute) |
 
 Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X im Zeitraum Y“.
+
+#### Fehlercodes
+
+`error` enthält nur feste, kurze Codes, nie freien Text (wichtig für Regeln und, später, für den KI-Prompt):
+
+| Code | Messung | Bedeutung |
+|---|---|---|
+| `no_reply` | Ping | Keine einzige Antwort in der Runde (`ok = 0`, `loss_pct = 100`) |
+| `no_gateway` | Ping, DNS | Kein Router erkannt (kein Netz oder VPN ohne Router) |
+| `timeout`, `nxdomain`, `noanswer`, `servfail`, `dns_error` | DNS | siehe [dns.md](dns.md) |
+| `no_system_dns` | DNS | Kein DNS-Server im Betriebssystem eingerichtet |
+| `probe_error` | alle | Fehler im Programm oder Zeitlimit überschritten; Details im Log |
+
+Ein Ping mit teilweisem Verlust ist `ok = 1` ohne `error`; der Verlust steht in `loss_pct`.
 
 ### `network_contexts`
 
@@ -67,7 +83,9 @@ Index auf `(probe, ts)`, weil fast jede Abfrage lautet: „Werte von Messung X i
 | `interface` | TEXT | `Ethernet` | Netzwerkkarte |
 | `first_seen` | TEXT | `2026-11-26T08:00:00Z` | Wann dieser Kontext zum ersten Mal auftrat |
 
-**Warum eine eigene Tabelle?** Gateway und Interface ändern sich selten. Statt sie in jeder Messung zu wiederholen, steht dort nur die Nummer. Ändert sich der Kontext (VPN an, anderes WLAN), entsteht eine neue Zeile und ein Ereignis `network_change`. Die Störungserkennung vergleicht nur Messungen aus demselben Kontext und vermeidet so Fehlalarme.
+**Festlegung aus Sprint 1:** `(gateway, interface)` ist eindeutig. Kehrt man in ein bekanntes Netz zurück (z. B. abends wieder ins Heim-WLAN), wird die bestehende Zeile wiederverwendet. So landen alle Messungen aus dem Heimnetz unter einem Kontext.
+
+**Warum eine eigene Tabelle?** Gateway und Interface ändern sich selten. Statt sie in jeder Messung zu wiederholen, steht dort nur die Nummer. Ändert sich der Kontext (VPN an, anderes WLAN), entsteht ein Ereignis `network_change` und, falls das Netz neu ist, eine neue Zeile. Die Störungserkennung vergleicht nur Messungen aus demselben Kontext und vermeidet so Fehlalarme.
 
 ### `events`
 

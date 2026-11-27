@@ -1,6 +1,6 @@
 # Probe-Schnittstelle
 
-> Sprint 0 · Stand 27.11.2026 (an [tech-stack.md](tech-stack.md) und ADR-006/010 angepasst) · gehört zu [projektplan.md](projektplan.md) und [datenmodell.md](datenmodell.md)
+> Sprint 0 · Stand 27.11.2026 (an [tech-stack.md](tech-stack.md) und ADR-006/010 angepasst; in Sprint 1 umgesetzt, Abweichungen vom Entwurf unten markiert) · gehört zu [projektplan.md](projektplan.md) und [datenmodell.md](datenmodell.md)
 
 Eine **Probe** ist eine Messung, z. B. „Ping zum Router“. Dieses Dokument legt fest, wie eine Probe aussieht, wie sie gestartet wird und wie man eine neue hinzufügt.
 
@@ -39,6 +39,10 @@ flowchart LR
 | `platform` | Betriebssystem-spezifisches, z. B. Gateway erkennen |
 
 ## Die Schnittstelle (Entwurf)
+
+> **Umgesetzt in Sprint 1** in `src/rootping/probes/base.py`, mit zwei kleinen Abweichungen vom Entwurf unten:
+> 1. `Probe` ist generisch (`Probe[PingSettings]`), damit Pyright weiß, welche Felder `self.settings` hat.
+> 2. `targets()` ist abstrakt, weil jede Probe ihre Ziele anders bestimmt (Ping: Liste oder `auto`, DNS: Platzhalter `gateway`/`system`).
 
 ```python
 """Gemeinsame Schnittstelle für alle Messungen (Probes)."""
@@ -146,23 +150,24 @@ Damit Probes klein bleiben, erledigt der Scheduler alles Gemeinsame an einer Ste
 
 1. **Takt:** Jede aktivierte Probe läuft in ihrem eigenen Intervall, driftfrei über `loop.time()`; alle Ziele einer Runde werden in einer `asyncio.TaskGroup` gleichzeitig gemessen. Der Ping sendet innerhalb der Runde fest jede Sekunde ein Echo, ohne auf die Antwort zu warten, und berechnet Mittelwert, Maximum, Verlust und Jitter selbst (`summarize()`, siehe [diagnose.md](diagnose.md#jitter-definition)).
 2. **Sicherheitsnetz:** Hängt eine Probe länger als ihr Timeout oder wirft sie unerwartet eine Ausnahme, wird daraus ein `ProbeResult` mit `ok=False, error="probe_error"`. Ein Fehler in einer Probe stoppt nie die anderen.
-3. **Messlücken:** Liegt zwischen zwei Runden deutlich mehr Zeit als das Intervall (z. B. nach dem Ruhezustand), schreibt der Scheduler ein Ereignis `gap` statt einer Störung.
+3. **Messlücken:** Springt die Wanduhr deutlich weiter als erwartet (z. B. nach dem Ruhezustand), schreibt der Scheduler ein Ereignis `gap` statt einer Störung. *Umgesetzt* als Wächter, der jede Sekunde prüft, Schwelle `service.gap_seconds` ([messdienst.md](messdienst.md)).
 4. **Netzwerk-Kontext:** Vor jeder Runde prüft er Gateway und Interface. Hat sich etwas geändert, legt er einen neuen Kontext an und schreibt ein Ereignis `network_change`.
 5. **Speichern:** Ergebnisse gehen an `storage`, das als einziges in die Datenbank schreibt.
 
 ## Eine neue Probe hinzufügen
 
-1. Klasse in `rootping/probes/<name>.py` anlegen, von `Probe` erben, `name` setzen, `measure()` schreiben (mit Docstring).
-2. Eine Zeile in `PROBES` ergänzen.
-3. Abschnitt `[probes.<name>]` in `config.toml` mit Standardwerten ergänzen.
-4. Test mit einem gefälschten Netzwerkaufruf schreiben (siehe unten).
-5. Diese Seite um die neue Probe ergänzen.
+1. Klasse in `src/rootping/probes/<name>.py` anlegen, dazu ein Einstellungsmodell, das von `ProbeSettings` erbt. Die Probe erbt von `Probe[<Einstellungen>]`, setzt `name` und schreibt `targets()` und `measure()` (mit Docstrings).
+2. Eine Zeile in `PROBES` (`src/rootping/probes/__init__.py`) ergänzen.
+3. Ein gleichnamiges Feld in `ProbesSettings` (`src/rootping/config.py`) ergänzen. Ein Test prüft, dass `PROBES` und `ProbesSettings` dieselben Namen haben.
+4. Abschnitt `[probes.<name>]` mit Standardwerten in `config.example.toml` ergänzen (ein Test vergleicht ihn mit dem Code).
+5. Test mit einem gefälschten Netzwerkaufruf schreiben (siehe unten).
+6. Diese Seite und [architektur.md](architektur.md) um die neue Probe ergänzen.
 
 Nicht nötig: Datenbank, Scheduler oder andere Probes anfassen.
 
 ## Testen
 
-- **Unit-Tests:** Der eigentliche Netzwerkaufruf (die Funktion `echo()` aus `rootping/net/icmp.py`, `dns.asyncresolver`) wird durch eine Fälschung ersetzt (Mock). So prüft man z. B., dass bei 2 von 10 verlorenen Paketen `loss_pct == 20.0` herauskommt, ohne Netzwerk.
+- **Unit-Tests:** Der eigentliche Netzwerkaufruf (`echo()` aus `rootping/net/icmp.py`, `query()` aus `rootping/net/dns_query.py`) wird durch eine Fälschung ersetzt. Die Probes nehmen ihn dafür als optionalen Parameter entgegen (`PingInternetProbe(settings, echo=fake)`). So prüft man z. B., dass bei 2 von 10 verlorenen Paketen `loss_pct == 20.0` herauskommt, ohne Netzwerk.
 - **`FakeProbe`:** Eine Probe für Tests, die vorgegebene Ergebnisse liefert. Damit lassen sich Scheduler, Störungserkennung und Regeln testen.
 - **Labor:** Die echten Probes laufen gegen die Container (ab Sprint 2).
 

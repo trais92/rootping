@@ -99,3 +99,16 @@ def test_invalid_config_gives_exit_code_2(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["check", "--config", str(bad)])
     assert result.exit_code == 2
     assert "probes.ping_internet.timeout" in result.output
+
+
+def test_console_line_shows_only_values_the_probe_has() -> None:
+    from rootping.probes.base import ProbeResult
+    from rootping.timeutil import utc_now
+
+    dns_line = cli._format_result(ProbeResult("dns_lookup", "1.1.1.1", utc_now(), True, 11.0))
+    assert "11.0 ms" in dns_line
+    assert "Verlust" not in dns_line
+    ping_line = cli._format_result(
+        ProbeResult("ping_internet", "1.1.1.1", utc_now(), True, 14.1, 10.0, 3.2, 31.0)
+    )
+    assert "Verlust  10.0 %" in ping_line

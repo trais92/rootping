@@ -44,7 +44,7 @@
 Zielplattformen: **Windows und Linux**. RootPing selbst (Messungen, Erkennung, Agent, MCP) läuft auf beiden. Das Störungslabor bleibt in Linux-Containern, denn `tc netem` gibt es nur unter Linux; unter Windows läuft es über Docker Desktop (WSL2).
 
 **Was Windows konkret bedeutet:**
-- Plattformabhängiges ist in einem kleinen Modul gekapselt (`platform/windows.py`, `platform/linux.py`). Das betrifft vor allem die **Gateway-Erkennung** (Linux: Routing-Tabelle, Windows: `Get-NetRoute` bzw. `route print`).
+- Plattformabhängiges ist in einem kleinen Modul gekapselt (`platform/windows.py`, `platform/linux.py`). Das betrifft vor allem die **Gateway-Erkennung** (Linux: `/proc/net/route`, Windows: `GetBestRoute`, beides ohne Unterprozess, siehe [ping.md](ping.md)).
 - **Ping ohne Adminrechte:** unter Windows über die Windows-ICMP-API wie `ping.exe` (ADR-006). Ein kurzer Spike in Sprint 1 auf Kais PC ohne Admin bestätigt das. Notlösung: System-`ping` aufrufen.
 - Dateipfade (Datenbank, Konfiguration) über `platformdirs`, nicht fest verdrahtet.
 - CI testet jeden PR auf **Windows und Linux**.
@@ -55,8 +55,8 @@ Zielplattformen: **Windows und Linux**. RootPing selbst (Messungen, Erkennung, A
 
 | Messung | Was | Intervall (Vorschlag) | Bibliothek |
 |---|---|---|---|
-| `ping_gateway` | Latenz (Mittel und Maximum), Paketverlust, Jitter zum Router | 1 Ping/s, zusammengefasst alle 10 s | `icmplib` (ohne Root möglich) |
-| `ping_internet` | dasselbe zu 2–3 Zielen (z. B. 1.1.1.1, 9.9.9.9) | 1 Ping/s, zusammengefasst alle 10 s | `icmplib` |
+| `ping_gateway` | Latenz (Mittel und Maximum), Paketverlust, Jitter zum Router | 1 Ping/s, zusammengefasst alle 10 s | Windows-ICMP-API bzw. `icmplib` (ADR-006) |
+| `ping_internet` | dasselbe zu 2–3 Zielen (z. B. 1.1.1.1, 9.9.9.9) | 1 Ping/s, zusammengefasst alle 10 s | Windows-ICMP-API bzw. `icmplib` |
 | `dns_lookup` | Antwortzeit, Erfolg, Fehlerart (Timeout, SERVFAIL, NXDOMAIN) pro DNS-Server | 30 s | `dnspython` |
 
 **Warum genau diese drei?** Sie reichen für die wichtigste Unterscheidung: *Heimnetz kaputt* (Router-Ping schlecht) vs. *Provider/Internet kaputt* (Router gut, Internet schlecht) vs. *DNS kaputt* (Pings gut, DNS schlecht). Mehr Messungen machen den Agenten nicht klüger, nur das Projekt größer.
@@ -152,6 +152,8 @@ flowchart LR
 | 3 | Erkennen und Regeln | Vorfallerkennung, Regel-Baseline, gemeinsame Werkzeuge |
 | 4 | KI-Diagnose | Claude-Agent mit Werkzeugen und Limits, Traceroute auf Anfrage, MCP-Server |
 | 5 | Beweisen | Auswertung (Tabelle + Konfusionsmatrix), README mit Demo, Puffer |
+
+**Stand Sprint 1 (27.11.2026):** Gerüst, CI (Windows + Linux × Python 3.14 + 3.15), alle drei Messungen, SQLite und `rootping run` sind umgesetzt (PR #3), dazu `rootping check` für den Windows-Test ohne Admin. Offen: dieser Test auf Kais PC ([ping.md](ping.md#test-ohne-adminrechte-offener-punkt-aus-sprint-0)). Überblick über den Code: [architektur.md](architektur.md).
 
 **Windows kostet etwa 4–6 Stunden extra**, vor allem in Sprint 1 (zweites CI-System, Gateway-Erkennung, Ping-Spike). Deshalb wandert `rootping status` in Sprint 2, und der Puffer in Sprint 5 wird kleiner.
 

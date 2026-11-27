@@ -1,1 +1,1 @@
-"""Tests für RootPing. Überblick: docs/tests.md."""
+"""Tests für RootPing. Überblick: docs/entwicklung.md."""
