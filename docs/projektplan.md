@@ -45,7 +45,7 @@ Zielplattformen: **Windows und Linux**. RootPing selbst (Messungen, Erkennung, A
 
 **Was Windows konkret bedeutet:**
 - Plattformabhängiges ist in einem kleinen Modul gekapselt (`platform/windows.py`, `platform/linux.py`). Das betrifft vor allem die **Gateway-Erkennung** (Linux: Routing-Tabelle, Windows: `Get-NetRoute` bzw. `route print`).
-- **Ping ohne Adminrechte** muss auf Windows früh geprüft werden (kurzer Spike in Sprint 1). Plan B: System-`ping` aufrufen oder TCP-Verbindungszeit messen.
+- **Ping ohne Adminrechte:** unter Windows über die Windows-ICMP-API wie `ping.exe` (ADR-006). Ein kurzer Spike in Sprint 1 auf Kais PC ohne Admin bestätigt das. Notlösung: System-`ping` aufrufen.
 - Dateipfade (Datenbank, Konfiguration) über `platformdirs`, nicht fest verdrahtet.
 - CI testet jeden PR auf **Windows und Linux**.
 
@@ -125,14 +125,17 @@ flowchart LR
 
 ## 6. Technik
 
+> **Aktualisiert 27.11.2026:** Die ausführliche Prüfung aller Technik-Entscheidungen mit Quellen steht in [tech-stack.md](tech-stack.md), von Kai am 27.11.2026 angenommen (ADR 006–010). Die Tabelle ist die Kurzfassung davon.
+
 | Bereich | Wahl | Kurz begründet |
 |---|---|---|
-| Sprache | Python 3.12+, `uv`, `ruff`, `pytest` | Standard, schnelles Setup |
-| Messungen | `icmplib`, `dnspython` | Ping ohne Root, präzise DNS-Fehlerarten |
+| Sprache | Python 3.14+ (entwickelt auf 3.15), `uv`, `ruff`, Pyright, `pytest`, `prek` | Aktuell, mit getesteter Untergrenze (ADR-007) |
+| Messungen | Ping: Windows-ICMP-API (`ctypes`) bzw. Linux-Ping-Socket (`icmplib`), fester 1-s-Takt; DNS: `dnspython` | Ping ohne Admin auf beiden Systemen, präzise DNS-Fehlerarten (ADR-006) |
+| Konfiguration | TOML, geprüft mit `pydantic-settings` | Fehler fallen beim Start auf (ADR-010) |
 | Speicherung | SQLite (Standardbibliothek) | Keine Installation, eine Datei |
 | CLI | `typer` | `rootping run`, `rootping status`, `rootping diagnose` |
-| KI | Anthropic Python SDK, Modell konfigurierbar | Tool Use, strukturierte Ausgabe |
-| MCP | Offizielles MCP Python SDK | Werkzeuge wiederverwenden |
+| KI | Anthropic Python SDK 2.x, Messages API mit eigener Agent-Schleife, Modell konfigurierbar | Tool Use, strukturierte Ausgabe, voll erklärbar (ADR-008) |
+| MCP | Offizielles MCP Python SDK 2.x, nur stdio, nur lesend | Werkzeuge wiederverwenden (ADR-009) |
 | Labor | Docker Compose + `tc netem` | Reproduzierbare Störungen |
 | Plattform | `platformdirs`, eigenes `platform/`-Modul | Windows und Linux sauber getrennt |
 | CI | GitHub Actions (Windows + Linux) | Tests bei jedem PR auf beiden Systemen |
@@ -179,7 +182,7 @@ Klassischer Rahmen (dieser Plan, Meilensteine, Risiken, ADRs) plus **Kanban mit 
 
 | Risiko | Gegenmaßnahme |
 |---|---|
-| Ping ohne Adminrechte klappt auf Windows nicht | Spike gleich in Sprint 1; Plan B System-`ping` oder TCP-Verbindungszeit |
+| Ping ohne Adminrechte klappt auf Windows nicht | Windows-ICMP-API statt `icmplib` (ADR-006, laut Microsoft-Doku ohne Admin); Spike gleich in Sprint 1 auf Kais PC ohne Admin; Notlösung System-`ping` |
 | Systembefehle liefern je nach Sprache andere Ausgaben (deutsches vs. englisches Windows) | Wo möglich Bibliotheken oder strukturierte Ausgaben (PowerShell-Objekte) statt Text parsen |
 | Traceroute wird falsch gedeutet (Router antworten absichtlich langsam) | Verlust an Zwischen-Hops zählt nur, wenn er bis zum Ziel anhält; Regel steht im Agent-Prompt |
 | Traceroute-Ausgabe unterscheidet sich je System und Sprache | Nur IPs und Zeiten lesen (`-d`/`-n`), Tests mit deutschen und englischen Beispielausgaben |

@@ -1,6 +1,6 @@
 # ADR-004: Ping ohne Adminrechte mit icmplib
 
-- **Status:** angenommen, wird in Sprint 1 durch einen Spike bestätigt
+- **Status:** ersetzt durch [ADR-006](006-ping-ueber-betriebssystem-schnittstellen.md) (2026-11-27). Grund: `icmplib` ignoriert `privileged=False` unter Windows, siehe [tech-stack.md](../tech-stack.md), Befund B1.
 - **Datum:** 2026-11-26
 
 ## Kontext

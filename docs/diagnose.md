@@ -1,6 +1,6 @@
 # Diagnose: Schwellwerte, Entscheidungsbaum und Testszenarien
 
-> Sprint 0 · Stand 26.11.2026 · gehört zu [projektplan.md](projektplan.md), [datenmodell.md](datenmodell.md), [probes.md](probes.md)
+> Sprint 0 · Stand 27.11.2026 (Jitter und DNS-Ziele nach [tech-stack.md](tech-stack.md) ergänzt) · gehört zu [projektplan.md](projektplan.md), [datenmodell.md](datenmodell.md), [probes.md](probes.md)
 
 Dieses Dokument legt fest, **wann** RootPing etwas als „nicht gut“ markiert, **wie** die Regel-Baseline die Ursache bestimmt und **mit welchen Szenarien** Regeln und KI im Labor verglichen werden.
 
@@ -30,6 +30,12 @@ Jede gespeicherte Messrunde wird gegen diese Schwellen geprüft. Überschreitet 
 | DNS-Fehler | jeder Fehler (Timeout, SERVFAIL, …) | DNS |
 
 **Gespeichert wird jede Messung**, auch unauffällige. Ob eine Runde auffällig ist, wird **beim Abfragen** aus den aktuellen Schwellen berechnet und nicht fest in die Datenbank geschrieben. So kann man die Schwellen ändern und sieht sofort auch alte Daten mit den neuen Werten.
+
+### Jitter-Definition
+
+RootPing berechnet alle Ping-Kennzahlen einer Runde selbst aus den Einzelwerten (Funktion `summarize()`, [ADR-006](adr/006-ping-ueber-betriebssystem-schnittstellen.md)). **Jitter** ist der Mittelwert der absoluten Differenzen aufeinanderfolgender Antwortzeiten. Verlorene Pakete werden übersprungen, die Differenz wird dann zwischen den zwei nächsten erhaltenen Antworten gebildet. Bei weniger als zwei Antworten ist der Jitter leer (`None`). Die Definition ist dieselbe wie in `icmplib` und folgt der Idee von RFC 3550. So ist sie auf Windows und Linux gleich und hängt an keiner Bibliothek.
+
+Beispiel: Antworten 20, 25, verloren, 22 ms ergeben die Differenzen 5 und 3, also 4 ms Jitter.
 
 ## Stufe 2: Störung (Vorfall)
 
@@ -67,8 +73,12 @@ flowchart TD
 **Grundprinzip „die unterste Schicht gewinnt“:** Ein Problem im Heimnetz verursacht auch schlechte Internet- und DNS-Werte. Deshalb wird von unten nach oben geprüft, und die erste auffällige Schicht ist die Ursache.
 
 **Unterscheidung innerhalb von `dns`** (nur für den Text, nicht für die Schicht):
-- Nur der System-DNS (meist der Router) ist auffällig, der öffentliche DNS nicht → „DNS des Routers langsam oder gestört“
+- Nur der Router-DNS (Ziel `gateway`) ist auffällig, der öffentliche DNS nicht → „DNS des Routers langsam oder gestört“
 - Alle DNS-Server auffällig → „DNS allgemein gestört“
+
+**Zwei Grenzen der DNS-Messung** (aus [tech-stack.md](tech-stack.md#310-dns-dnspython--) 3.10):
+- Unter Linux mit systemd-resolved ist das Ziel `system` meist der lokale Cache `127.0.0.53`, nicht der Router. Deshalb gibt es das zusätzliche Ziel `gateway`, das den Router direkt fragt.
+- Wer alle 30 s denselben Namen abfragt, misst ab der zweiten Anfrage meist einen Cache. Das ist für die Frage „antwortet DNS überhaupt und schnell?“ gewollt. Langsame Auflösung beim Provider fällt so aber nur auf, wenn der Cache abläuft.
 
 **Bekannte Schwäche (gewollt):** Bei **zwei gleichzeitigen** Ursachen (z. B. leichter Provider-Verlust und langsamer DNS) meldet der Baum nur die unterste. Genau hier soll die Auswertung zeigen, ob der Agent mehr findet.
 
