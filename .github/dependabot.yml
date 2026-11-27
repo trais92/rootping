@@ -1,0 +1,18 @@
+# Automatische Update-Vorschläge als Pull Requests (docs/tech-stack.md 3.22).
+# Cooldown 7 Tage, passend zu exclude-newer in pyproject.toml; sonst würde
+# Dependabot Versionen vorschlagen, die uv noch gar nicht auflösen darf.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

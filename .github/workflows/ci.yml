@@ -1,0 +1,81 @@
+# CI für RootPing: jeder Push auf main und jeder Pull Request wird auf
+# Windows und Linux mit Python 3.14 und 3.15 geprüft (ADR-002, ADR-007).
+# Erklärung der Schritte: docs/entwicklung.md
+#
+# Sicherheit (docs/tech-stack.md 3.22): minimale Rechte, Actions auf volle
+# Commit-SHA gepinnt (Kommentar = Version), keine Zugangsdaten im Checkout.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · Python ${{ matrix.python }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.14", "3.15"]
+    env:
+      UV_PYTHON: ${{ matrix.python }}
+    steps:
+      - name: Code holen
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: uv und Python installieren
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.13.10"
+          python-version: ${{ matrix.python }}
+          enable-cache: false
+
+      - name: Abhängigkeiten exakt nach uv.lock installieren
+        run: uv sync --locked
+
+      - name: Ping-Freigabe anzeigen (nur Linux, zur Nachvollziehbarkeit)
+        if: runner.os == 'Linux'
+        run: cat /proc/sys/net/ipv4/ping_group_range
+
+      - name: Lint (ruff)
+        run: uv run ruff check .
+
+      - name: Formatierung (ruff format)
+        run: uv run ruff format --check .
+
+      - name: Typprüfung (Pyright)
+        run: uv run pyright
+
+      - name: Tests (pytest)
+        run: uv run pytest --cov=rootping --cov-report=term-missing
+
+  workflows:
+    name: Workflow-Prüfung (zizmor)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Code holen
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+
+      - name: uv installieren
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.13.10"
+          enable-cache: false
+
+      - name: Workflows und Dependabot-Konfiguration statisch prüfen
+        run: uv run --locked zizmor --offline .github
