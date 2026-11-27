@@ -31,3 +31,13 @@ enabled  = true
 targets  = ["1.1.1.1", "9.9.9.9"]  # nur IPv4-Adressen, keine Namen (ADR-011)
 interval = 10
 timeout  = 2
+
+[probes.dns_lookup]
+enabled  = true
+targets  = ["gateway", "system", "1.1.1.1"]
+# "gateway" = DNS-Anfrage direkt an den Router
+# "system"  = DNS-Server des Betriebssystems; unter Linux mit systemd-resolved
+#             oft der lokale Zwischenspeicher 127.0.0.53, nicht der Router
+query    = "example.com"  # abgefragter Name (A-Eintrag)
+interval = 30
+timeout  = 3

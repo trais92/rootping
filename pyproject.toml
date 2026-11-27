@@ -11,6 +11,7 @@ authors = [{ name = "Kai" }]
 # Untergrenzen = getestete Minor-Versionen (tech-stack.md, Anhang A).
 # Die genauen Versionen hält uv.lock fest.
 dependencies = [
+    "dnspython>=2.9", # DNS-Messung mit genauen Fehlerarten
     "icmplib>=3.0.4; sys_platform == 'linux'", # nur der Linux-Ping (ADR-006)
     "platformdirs>=4.14",
     "pydantic>=2.14",

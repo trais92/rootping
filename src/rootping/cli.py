@@ -3,8 +3,8 @@
 Befehle in Sprint 1:
 
 - ``rootping run``: Messdienst starten (läuft bis Strg+C).
-- ``rootping check``: Umgebung prüfen: Konfiguration, Ping-Rechte, Router und
-  ein kurzer Test-Ping. Gedacht als erster Schritt auf einem neuen Rechner,
+- ``rootping check``: Umgebung prüfen: Konfiguration, Ping-Rechte, Router,
+  ein paar Test-Pings und je eine DNS-Abfrage. Gedacht als erster Schritt auf einem neuen Rechner,
   z. B. für den Windows-Test ohne Adminrechte (``docs/ping.md``).
 
 Die CLI enthält keine Logik, sie ruft nur ``config``, ``service`` und
@@ -24,6 +24,7 @@ from rootping.config import ConfigError, Settings, default_config_path, load_set
 from rootping.logsetup import setup_logging
 from rootping.net import icmp
 from rootping.probes.base import ProbeResult
+from rootping.probes.dns import DnsProbe
 from rootping.probes.ping import ECHO_PERIOD_S, fixed_rate_echoes
 from rootping.service import run_service
 
@@ -101,7 +102,7 @@ def run(
 
 @app.command()
 def check(config: ConfigOption = None) -> None:
-    """Prüft Konfiguration, Ping-Rechte und Router und sendet ein paar Test-Pings."""
+    """Prüft Konfiguration, Ping-Rechte und Router und testet Ping und DNS."""
     settings = _load(config)
     config_path = config or default_config_path()
     source = config_path if config_path.is_file() else f"{config_path} (nicht vorhanden)"
@@ -121,22 +122,31 @@ def check(config: ConfigOption = None) -> None:
     else:
         typer.echo(f"Router:        {context.gateway} über {context.interface}")
 
+    asyncio.run(_test_network(settings, context))
+
+
+async def _test_network(settings: Settings, context: platform.NetworkContext | None) -> None:
+    """Sendet für ``check`` ein paar Test-Pings und je eine DNS-Abfrage und zeigt das Ergebnis."""
+    ping_settings = settings.probes.ping_internet
     targets = [context.gateway] if context else []
-    targets += settings.probes.ping_internet.targets[:1]
-    if not targets:
-        return
+    targets += ping_settings.targets[:1]
     typer.echo(f"\nTest-Ping, je {CHECK_ECHOES} Echos:")
     for target in targets:
-        rtts = asyncio.run(
-            fixed_rate_echoes(
-                icmp.echo,
-                target,
-                count=CHECK_ECHOES,
-                period=ECHO_PERIOD_S,
-                timeout=settings.probes.ping_internet.timeout,
-            )
+        rtts = await fixed_rate_echoes(
+            icmp.echo,
+            target,
+            count=CHECK_ECHOES,
+            period=ECHO_PERIOD_S,
+            timeout=ping_settings.timeout,
         )
         shown = ", ".join("verloren" if rtt is None else f"{rtt:.1f} ms" for rtt in rtts)
+        typer.echo(f"  {target:<15} {shown}")
+
+    dns_probe = DnsProbe(settings.probes.dns_lookup)
+    typer.echo(f"\nTest-DNS (Abfrage {settings.probes.dns_lookup.query}):")
+    for target in dns_probe.targets():
+        result = await dns_probe.measure(target)
+        shown = f"{result.latency_ms:.1f} ms" if result.ok else f"FEHLER: {result.error}"
         typer.echo(f"  {target:<15} {shown}")
 
 
