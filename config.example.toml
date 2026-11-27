@@ -1,0 +1,33 @@
+# RootPing – Beispielkonfiguration mit allen Standardwerten.
+#
+# Verwendung: Datei als config.toml in den Konfigurationsordner kopieren
+#   Windows: %LOCALAPPDATA%\rootping\config.toml
+#   Linux:   ~/.config/rootping/config.toml
+# oder beim Start angeben: rootping run --config pfad/zur/datei.toml
+#
+# Nur Werte eintragen, die man ändern will; alles andere bleibt beim Standard.
+# Unbekannte Schlüssel sind ein Fehler (Tippfehler fallen sofort auf).
+# Jeder Wert lässt sich auch per Umgebungsvariable setzen, z. B.
+#   ROOTPING_PROBES__PING_INTERNET__TIMEOUT=3
+# Erklärung aller Einstellungen: docs/konfiguration.md
+# Ein Test prüft, dass diese Datei genau den Standardwerten im Code entspricht.
+
+# Pfad der SQLite-Datei. Weglassen = Standardordner des Betriebssystems
+#   Windows: %LOCALAPPDATA%\rootping\rootping.db
+#   Linux:   ~/.local/share/rootping/rootping.db
+# database = "rootping.db"
+
+[service]
+gap_seconds = 30   # Uhr springt weiter als so viele Sekunden → Messlücke (z. B. Ruhezustand)
+
+[probes.ping_gateway]
+enabled  = true
+targets  = ["auto"]  # "auto" = Router automatisch erkennen; sonst IPv4-Adressen
+interval = 10        # Sekunden pro Runde; fest 1 Echo pro Sekunde, also 10 Echos (ADR-006)
+timeout  = 2         # Sekunden Wartezeit pro Echo; Echos dürfen sich überlappen
+
+[probes.ping_internet]
+enabled  = true
+targets  = ["1.1.1.1", "9.9.9.9"]  # nur IPv4-Adressen, keine Namen (ADR-011)
+interval = 10
+timeout  = 2
